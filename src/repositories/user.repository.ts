@@ -1,47 +1,45 @@
-import { db } from "@/lib/prisma"
-import type { RegisterUserInput } from "@/schemas/auth.schema"
+import { db } from '@/lib/prisma'
+import type { RegisterUserInput } from '@/schemas/auth.schema'
 
 export class UserRepository {
+	async findByEmail(email: string) {
+		return db.user.findUnique({
+			where: { email },
+		})
+	}
 
-    async findByEmail(email: string) {
-        return db.user.findUnique({
-            where: { email }
-        })
-    }
+	async findById(id: string) {
+		return db.user.findUnique({
+			where: { id },
+		})
+	}
 
-    async findById(id: string) {
-        return db.user.findUnique({
-            where: { id }
-        })
-    }
+	async findByCPF(cpf: string) {
+		return db.user.findUnique({
+			where: { cpf },
+		})
+	}
 
-    async findByCPF(cpf: string) {
-        return db.user.findUnique({
-            where: { cpf }
-        })
-    }
+	async createUser(userData: RegisterUserInput) {
+		return db.user.create({
+			data: userData,
+		})
+	}
 
-    async createUser(userData: RegisterUserInput) {
-        return db.user.create({
-            data: userData
-        })
-    }
+	async updateResetCode(id: string, resetCode: string) {
+		return db.user.update({
+			where: { id },
+			data: { resetCode },
+		})
+	}
 
-    async updateResetCode(id: string, resetCode: string) {
-        return db.user.update({
-            where: { id },
-            data: { resetCode }
-        })
-    }
-
-    async updatePassword(id: string, newPasswordHash: string) {
-        return db.user.update({
-            where: { id },
-            data: { 
-                password: newPasswordHash,
-                resetCode: null
-            }
-        })
-    }
-
+	async updatePassword(id: string, newPasswordHash: string) {
+		return db.user.update({
+			where: { id },
+			data: {
+				password: newPasswordHash,
+				resetCode: null,
+			},
+		})
+	}
 }

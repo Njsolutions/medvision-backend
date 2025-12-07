@@ -9,7 +9,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 const version = process.env.API_VERSION || '1'
 
 const server = fastify({
-	trustProxy: true
+	trustProxy: true,
 }).withTypeProvider<ZodTypeProvider>()
 
 server.setValidatorCompiler(validatorCompiler)
