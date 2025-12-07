@@ -13,7 +13,7 @@
 		"db:migrate:dev": "pnpm exec prisma migrate dev",
 		"db:push": "pnpm exec prisma db push",
 		"db:studio": "pnpm exec prisma studio",
-		"db:reset": "pnpm exec prisma migrate reset --force && pnpm run db:seed",
+		"db:reset": "pnpm exec prisma migrate reset --force",
 		"db:seed:admin": "tsx scripts/seed-admin.ts"
 	},
 	"keywords": [],

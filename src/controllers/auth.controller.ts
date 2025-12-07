@@ -22,9 +22,9 @@ export class AuthController {
 
 	async register(req: FastifyRequest, res: FastifyReply) {
 		try {
-			if (req.user !== 'master' && req.user?.role !== 'admin') {
+			/* if (req.user !== 'master' && req.user?.role !== 'admin') {
 				return res.status(403).send({ error: 'Insufficient permissions to register a new user' })
-			}
+			} */
 
 			const data = RegisterUserSchema.safeParse(req.body)
 
@@ -38,7 +38,8 @@ export class AuthController {
 				return res.status(409).send({ error: 'User with this CPF already exists' })
 			}
 
-			const passwordHash = this.cryptoService.hashPassword(data.data.password)
+			const passwordGeneration = this.cryptoService.generateRandomCode(8)
+			const passwordHash = this.cryptoService.hashPassword(passwordGeneration)
 
 			return await this.userRepository.createUser({
 				...data.data,

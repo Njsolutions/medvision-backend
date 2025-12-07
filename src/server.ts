@@ -5,6 +5,7 @@ import { fastifyCors } from '@fastify/cors'
 import ScalarApiReference from '@scalar/fastify-api-reference'
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
+import { authRoutes } from './routes/auth.routes'
 
 const version = process.env.API_VERSION || '1'
 
@@ -43,6 +44,8 @@ server.register(fastifySwagger, {
 })
 
 server.register(ScalarApiReference, { routePrefix: `/v${version}/docs` })
+
+server.register(authRoutes, { prefix: `/v${version}/auth` })
 
 async function start() {
 	try {
