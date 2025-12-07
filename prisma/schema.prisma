@@ -8,35 +8,130 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Admin {
-  id        String   @id @default(uuid())
+model User {
+  id        String  @id @default(uuid())
   name      String
-  email     String   @unique
+  cpf       String  @unique @db.VarChar(11)
+  phone     String  @db.VarChar(15)
+  email     String  @unique
   password  String
   resetCode String?
+  role      Roles   @default(admin)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  master  Master?
+  admin   Admin?
+  doctor  Doctor?
+  patient Patient?
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Master {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("masters")
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  utiAccess Boolean  @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("admins")
 }
 
+model Doctor {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  crm                String       @unique @db.VarChar(20)
+  specialty          String
+  monthlySlots       Int          @default(0)
+  weeklyAvailability Json?
+  status             DoctorStatus @default(active)
+  utiAccess         Boolean      @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments  Appointment[]
+  prescriptions Prescription[]
+  anamises      Anaminese[]
+  requests      Request[]
+
+  @@index([specialty])
+  @@map("doctors")
+}
+
+model Patient {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  age     Int
+  gender  Genders
+  address Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments  Appointment[]
+  prescriptions Prescription[]
+  requests      Request[]
+  anamises      Anaminese[]
+  uti           Uti?
+
+  @@map("patients")
+}
+
+model Uti {
+  id        String   @id @default(uuid())
+  patientId String?  @unique
+  patient   Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  status   StatusUti @default(available)
+  roomLink String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("utis")
+}
+
+// Junction Models
+
 model Appointment {
-  id              String          @id @default(uuid())
+  id              String         @id @default(uuid())
   patientId       String
   doctorId        String
-  appointmentDate DateTime        @db.Timestamptz(6)
+  appointmentDate DateTime           @db.Timestamptz(6)
   reason          String
-  status          String          @default("scheduled")
+  status          AppointmentStatus @default(scheduled)
   notes           String?
   roomName        String?
   durationMinutes Int?
   feedbackPatient String?
   feedbackDoctor  String?
   finishedAt      DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  doctor          Doctor          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  patient         Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  doctor          Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient         Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
   prescriptions   Prescription[]
 
   @@unique([patientId, doctorId, appointmentDate])
@@ -45,69 +140,120 @@ model Appointment {
   @@map("appointments")
 }
 
-model Doctor {
-  id                 String          @id @default(uuid())
-  name               String
-  email              String          @unique
-  phone              String
-  crm                String          @unique
-  specialty          String
-  monthlySlots       Int             @default(0)
-  weeklyAvailability Json?
-  status             String          @default("active")
-  code               String?         @unique
-  password           String
-  resetCode          String?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  appointments       Appointment[]
-  prescriptions      Prescription[]
-
-  @@map("doctors")
-}
-
-model Patient {
-  id            String          @id @default(uuid())
-  name          String
-  age           Int
-  cpf           String          @unique
-  phone         String
-  gender        Genders
-  address       Json?
-  code          String?         @unique
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  appointments  Appointment[]
-  prescriptions Prescription[]
-
-  @@map("patients")
-}
-
 model Prescription {
-  id            String             @id @default(uuid())
+  id            String       @id @default(uuid())
   patientId     String
   doctorId      String
   appointmentId String?
   content       String
-  status        PrescriptionStatus @default(active)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  appointment   Appointment?       @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-  doctor        Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  patient       Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  doctor        Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient       Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@index([doctorId])
   @@index([patientId])
   @@map("prescriptions")
 }
 
-enum Genders {
-  male
-  female
+model Request {
+  id String @id @default(uuid())
+
+  type    RequestType
+  status  RequestStatus @default(pending)
+  details Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient   Patient? @relation(fields: [patientId], references: [id])
+  patientId String?
+  doctor    Doctor?  @relation(fields: [doctorId], references: [id])
+  doctorId  String?
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@map("requests")
 }
 
-enum PrescriptionStatus {
-  active
-  expired
-  cancelled
+model Anaminese {
+  id        String @id @default(uuid())
+  patientId String
+  doctorId  String
+  content   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient   Patient  @relation(fields: [patientId], references: [id])
+  doctor    Doctor   @relation(fields: [doctorId], references: [id])
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@map("anamneses")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  action    String
+  content   String
+  timestamp DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("audit_logs")
+  @@index([userId])
+}
+
+// Enums
+
+enum Roles {
+  master // usuário mestre
+  admin // administrador
+  doctor // médico
+  patient // paciente
+}
+
+enum Genders {
+  male // masculino
+  female // feminino
+}
+
+enum StatusUti {
+  available // UTI disponível
+  occupied
+}
+
+enum DoctorStatus {
+  active // Médico ativo
+  inactive // Médico inativo
+  onLeave // Médico em licença temporária
+}
+
+enum AppointmentStatus {
+  scheduled  // Consulta agendada
+  inProgress // Consulta em andamento
+  completed // Consulta concluída
+  cancelled // Consulta cancelada
+  noShow // Paciente não compareceu à consulta agendada
+}
+
+enum RequestType {
+  appointment // Solicitação de consulta
+  prescription // Solicitação de prescrição
+  consultation // Solicitação de consulta médica
+  utiAdmission // Solicitação de internação em UTI
+  other // Outros tipos de solicitação
+}
+
+enum RequestStatus {
+  pending // Solicitação pendente
+  approved // Solicitação aprovada
+  rejected // Solicitação rejeitada
+  completed // Solicitação concluída
+  cancelled // Solicitação cancelada
 }

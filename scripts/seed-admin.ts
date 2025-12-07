@@ -8,9 +8,9 @@ async function seedAdmin() {
 		console.log('🌱 Iniciando seed do admin...')
 
 		// Buscar variáveis de ambiente para o admin
-		const adminEmail = process.env.ADMIN_EMAIL || 'admin@medvision.com'
-		const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123456'
-		const adminName = process.env.ADMIN_NAME || 'Administrador'
+		const adminEmail = process.env.ADMIN_EMAIL || 'natanaelsouza.dev@gmail.com'
+		const adminPassword = process.env.ADMIN_PASSWORD || '@senhaforte123'
+		const adminName = process.env.ADMIN_NAME || 'Natanael Souza'
 
 		// Verificar se o admin já existe
 		const existingAdmin = await prisma.admin.findUnique({
