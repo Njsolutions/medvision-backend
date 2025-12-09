@@ -1,5 +1,6 @@
 export { createRateLimitService } from './ratelimit.service'
 export type { RateLimitService } from './ratelimit.service'
-export type { CryptoService } from './crypto.service'
+export { CryptoService } from './crypto.service'
 export { createDailyService } from './daily.service'
 export type { DailyService } from './daily.service'
+export { emailService } from './email.service'

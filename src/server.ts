@@ -6,6 +6,13 @@ import ScalarApiReference from '@scalar/fastify-api-reference'
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { authRoutes } from './routes/auth.routes'
+import { adminRoutes } from './routes/admin.routes'
+import { doctorRoutes } from './routes/doctor.routes'
+import { patientRoutes } from './routes/patient.routes'
+import { utiRoutes } from './routes/uti.routes'
+import { appointmentRoutes } from './routes/appointment.routes'
+import { auditLogRoutes } from './routes/auditlog.routes'
+import { auditContextDecorator } from './plugins/audit.plugin'
 
 const version = process.env.API_VERSION || '1'
 
@@ -45,7 +52,16 @@ server.register(fastifySwagger, {
 
 server.register(ScalarApiReference, { routePrefix: `/v${version}/docs` })
 
+// Adiciona contexto de auditoria a todas as requisições
+server.addHook('onRequest', auditContextDecorator)
+
 server.register(authRoutes, { prefix: `/v${version}/auth` })
+server.register(adminRoutes, { prefix: `/v${version}/admins` })
+server.register(doctorRoutes, { prefix: `/v${version}/doctors` })
+server.register(patientRoutes, { prefix: `/v${version}/patients` })
+server.register(utiRoutes, { prefix: `/v${version}/utis` })
+server.register(appointmentRoutes, { prefix: `/v${version}/appointments` })
+server.register(auditLogRoutes, { prefix: `/v${version}/audit-logs` })
 
 async function start() {
 	try {

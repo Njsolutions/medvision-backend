@@ -6,7 +6,7 @@ export const RegisterUserSchema = z.object({
 	phone: z.string().min(10, 'Phone number is required'),
 	email: z.string().email('Invalid email address'),
 	password: z.string().min(6, 'Password must be at least 6 characters long').optional(),
-	role: z.enum(['master', 'admin']).optional(),
+	role: z.enum(['master', 'admin', 'doctor', 'patient']).optional(),
 })
 
 export const SignInSchema = z.object({

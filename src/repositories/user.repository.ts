@@ -22,7 +22,10 @@ export class UserRepository {
 
 	async createUser(userData: RegisterUserInput) {
 		return db.user.create({
-			data: userData,
+			data: {
+				...userData,
+				password: userData.password || '',
+			},
 		})
 	}
 

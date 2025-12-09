@@ -1,9 +1,11 @@
 import '@fastify/jwt'
 import type { AuthUser } from '../plugins/auth.plugin'
+import type { AuditContext } from './audit.types'
 
 declare module 'fastify' {
 	interface FastifyRequest {
 		user?: AuthUser
+		auditContext?: AuditContext
 	}
 
 	interface FastifyInstance {

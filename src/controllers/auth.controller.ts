@@ -7,6 +7,7 @@ import {
 } from '@/schemas/auth.schema'
 import { CryptoService } from '@/services/crypto.service'
 import { JwtService } from '@/services/jwt.service'
+import { auditService } from '@/services/audit.service'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class AuthController {
@@ -22,9 +23,9 @@ export class AuthController {
 
 	async register(req: FastifyRequest, res: FastifyReply) {
 		try {
-			/* if (req.user !== 'master' && req.user?.role !== 'admin') {
+			if (req.user !== 'master' && req.user?.role !== 'admin') {
 				return res.status(403).send({ error: 'Insufficient permissions to register a new user' })
-			} */
+			}
 
 			const data = RegisterUserSchema.safeParse(req.body)
 
@@ -41,10 +42,22 @@ export class AuthController {
 			const passwordGeneration = this.cryptoService.generateRandomCode(8)
 			const passwordHash = this.cryptoService.hashPassword(passwordGeneration)
 
-			return await this.userRepository.createUser({
+			const newUser = await this.userRepository.createUser({
 				...data.data,
 				password: await passwordHash,
 			})
+
+			// Registra a criação do usuário no log de auditoria
+			if (req.user?.id && req.auditContext && data.data.role) {
+				await auditService.logUserCreate(
+					req.user.id,
+					newUser.id,
+					data.data.role,
+					req.auditContext
+				)
+			}
+
+			return newUser
 		} catch (error) {
 			console.error('Error during user registration:', error)
 			return res.status(500).send({ error: 'Internal server error' })
@@ -76,6 +89,11 @@ export class AuthController {
 				existingUser.role,
 				existingUser.name,
 			)
+
+			// Registra o login no log de auditoria
+			if (req.auditContext) {
+				await auditService.logLogin(existingUser.id, req.auditContext)
+			}
 
 			return res.status(200).send({
 				message: 'Sign-in successful',
@@ -133,6 +151,11 @@ export class AuthController {
 			const newPasswordHash = await this.cryptoService.hashPassword(data.data.newPassword)
 
 			await this.userRepository.updatePassword(existingUser.id, newPasswordHash)
+
+			// Registra a alteração de senha no log de auditoria
+			if (req.auditContext) {
+				await auditService.logPasswordReset(existingUser.id, req.auditContext)
+			}
 
 			return res.status(200).send({ message: 'Password has been reset successfully' })
 		} catch (error) {

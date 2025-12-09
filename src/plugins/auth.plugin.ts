@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export async function authenticate(req: FastifyRequest, res: FastifyReply) {
-	const token = req.cookies.token
+	const token = req.headers.authorization?.replace('Bearer ', '')
 
 	if (!token) {
 		return res.status(401).send({ error: 'Token não fornecido' })

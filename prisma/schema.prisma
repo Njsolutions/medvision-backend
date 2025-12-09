@@ -14,6 +14,7 @@ model User {
   cpf       String  @unique @db.VarChar(11)
   phone     String  @db.VarChar(15)
   email     String  @unique
+  active    Boolean @default(true)
   password  String
   resetCode String?
   role      Roles   @default(admin)
@@ -21,10 +22,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  master  Master?
-  admin   Admin?
-  doctor  Doctor?
-  patient Patient?
+  master    Master?
+  admin     Admin?
+  doctor    Doctor?
+  patient   Patient?
   auditLogs AuditLog[]
 
   @@map("users")
@@ -42,11 +43,11 @@ model Master {
 }
 
 model Admin {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  utiAccess Boolean  @default(false)
+  utiAccess Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -64,7 +65,7 @@ model Doctor {
   monthlySlots       Int          @default(0)
   weeklyAvailability Json?
   status             DoctorStatus @default(active)
-  utiAccess         Boolean      @default(false)
+  utiAccess          Boolean      @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -116,10 +117,10 @@ model Uti {
 // Junction Models
 
 model Appointment {
-  id              String         @id @default(uuid())
+  id              String            @id @default(uuid())
   patientId       String
   doctorId        String
-  appointmentDate DateTime           @db.Timestamptz(6)
+  appointmentDate DateTime          @db.Timestamptz(6)
   reason          String
   status          AppointmentStatus @default(scheduled)
   notes           String?
@@ -128,10 +129,10 @@ model Appointment {
   feedbackPatient String?
   feedbackDoctor  String?
   finishedAt      DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  doctor          Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  patient         Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  doctor          Doctor            @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient         Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
   prescriptions   Prescription[]
 
   @@unique([patientId, doctorId, appointmentDate])
@@ -194,19 +195,25 @@ model Anaminese {
 }
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  action    String
-  content   String
-  timestamp DateTime @default(now())
+  action      String
+  description String
+  content     Json?
+  impactLevel ImpactLevel @default(low)
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime    @default(now())
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("audit_logs")
   @@index([userId])
+  @@index([impactLevel])
+  @@index([timestamp])
+  @@map("audit_logs")
 }
 
 // Enums
@@ -235,7 +242,7 @@ enum DoctorStatus {
 }
 
 enum AppointmentStatus {
-  scheduled  // Consulta agendada
+  scheduled // Consulta agendada
   inProgress // Consulta em andamento
   completed // Consulta concluída
   cancelled // Consulta cancelada
@@ -256,4 +263,11 @@ enum RequestStatus {
   rejected // Solicitação rejeitada
   completed // Solicitação concluída
   cancelled // Solicitação cancelada
+}
+
+enum ImpactLevel {
+  low // Baixo impacto - visualização de dados
+  medium // Médio impacto - criação/atualização de dados
+  high // Alto impacto - exclusão ou alteração de dados sensíveis
+  critical // Crítico - alterações de segurança ou configurações do sistema
 }

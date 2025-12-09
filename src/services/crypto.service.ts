@@ -34,9 +34,11 @@ export class CryptoService {
 	}
 
 	generateRandomCode(length: number = 6): string {
+		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 		let code = ''
 		for (let i = 0; i < length; i++) {
-			code += Math.floor(Math.random() * 10)
+			const randomIndex = Math.floor(Math.random() * chars.length)
+			code += chars[randomIndex]
 		}
 		return code
 	}
