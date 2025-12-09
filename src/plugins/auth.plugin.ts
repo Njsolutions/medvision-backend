@@ -1,6 +1,7 @@
-import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify'
+import fp from 'fastify-plugin'
 
-export async function authenticate(req: FastifyRequest, res: FastifyReply) {
+async function authenticate(req: FastifyRequest, res: FastifyReply) {
 	const token = req.headers.authorization?.replace('Bearer ', '')
 
 	if (!token) {
@@ -14,3 +15,9 @@ export async function authenticate(req: FastifyRequest, res: FastifyReply) {
 		return res.status(450).send({ error: 'Token inválido' })
 	}
 }
+
+async function authPlugin(app: FastifyInstance) {
+	app.decorate('authenticate', authenticate)
+}
+
+export default fp(authPlugin)

@@ -13,6 +13,7 @@ import { utiRoutes } from './routes/uti.routes'
 import { appointmentRoutes } from './routes/appointment.routes'
 import { auditLogRoutes } from './routes/auditlog.routes'
 import { auditContextDecorator } from './plugins/audit.plugin'
+import authPlugin from './plugins/auth.plugin'
 
 const version = process.env.API_VERSION || '1'
 
@@ -38,6 +39,9 @@ server.register(fastifyJwt, {
 		expiresIn: '24h',
 	},
 })
+
+// Registra o plugin de autenticação
+server.register(authPlugin)
 
 server.register(fastifySwagger, {
 	openapi: {
