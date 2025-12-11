@@ -32,8 +32,13 @@ export const DeleteFileSchema = z.object({
 	id: z.string().uuid('Invalid file ID'),
 })
 
+export const DownloadFileSchema = z.object({
+	id: z.string().uuid('Invalid file ID'),
+})
+
 export type UploadFileInput = z.infer<typeof UploadFileSchema>
 export type GetFileUrlInput = z.infer<typeof GetFileUrlSchema>
 export type ListPatientFilesInput = z.infer<typeof ListPatientFilesSchema>
 export type DeleteFileInput = z.infer<typeof DeleteFileSchema>
+export type DownloadFileInput = z.infer<typeof DownloadFileSchema>
 export type FileCategoryType = z.infer<typeof FileCategory>

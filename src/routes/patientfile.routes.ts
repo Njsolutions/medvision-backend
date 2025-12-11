@@ -18,6 +18,13 @@ export function patientFileRoutes(app: FastifyInstance) {
 		async (req, res) => controller.getFileUrl(req, res),
 	)
 
+	// Download direto do arquivo
+	app.get(
+		'/:id/download',
+		{ preHandler: [app.authenticate] },
+		async (req, res) => controller.downloadFile(req, res),
+	)
+
 	// Listar arquivos de um paciente
 	app.get(
 		'/patient/:patientId',

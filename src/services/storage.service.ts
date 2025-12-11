@@ -91,6 +91,36 @@ export class StorageService {
 	}
 
 	/**
+	 * Faz download de um arquivo do R2
+	 * @param key - Chave do arquivo no R2
+	 */
+	async downloadFile(key: string): Promise<{
+		body: ReadableStream | Blob | Buffer
+		contentType: string
+	}> {
+		try {
+			const command = new GetObjectCommand({
+				Bucket: this.bucket,
+				Key: key,
+			})
+
+			const response = await this.s3Client.send(command)
+
+			if (!response.Body) {
+				throw new Error('File body is empty')
+			}
+
+			return {
+				body: response.Body as any,
+				contentType: response.ContentType || 'application/octet-stream',
+			}
+		} catch (error) {
+			console.error('Error downloading file from R2:', error)
+			throw new Error('Failed to download file from storage')
+		}
+	}
+
+	/**
 	 * Deleta um arquivo do R2
 	 */
 	async deleteFile(key: string): Promise<void> {

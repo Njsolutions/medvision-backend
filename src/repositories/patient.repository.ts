@@ -18,6 +18,14 @@ export class PatientRepository {
 						updatedAt: true,
 					},
 				},
+				files: {
+					where: {
+						deletedAt: null,
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
 			},
 			orderBy: {
 				createdAt: 'desc',
@@ -40,6 +48,23 @@ export class PatientRepository {
 						role: true,
 						createdAt: true,
 						updatedAt: true,
+					},
+				},
+				files: {
+					where: {
+						deletedAt: null,
+					},
+					include: {
+						uploadedByUser: {
+							select: {
+								id: true,
+								name: true,
+								email: true,
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
 					},
 				},
 			},
@@ -137,6 +162,23 @@ export class PatientRepository {
 										email: true,
 									},
 								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
+				files: {
+					where: {
+						deletedAt: null,
+					},
+					include: {
+						uploadedByUser: {
+							select: {
+								id: true,
+								name: true,
+								email: true,
 							},
 						},
 					},

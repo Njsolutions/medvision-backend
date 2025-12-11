@@ -2,6 +2,7 @@ import { PatientRepository } from '@/repositories/patient.repository'
 import { CreatePatientSchema, UpdatePatientSchema, PatientIdSchema } from '@/schemas/patient.schema'
 import { CryptoService } from '@/services/crypto.service'
 import { auditService } from '@/services/audit.service'
+import { storageService } from '@/services/storage.service'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class PatientController {
@@ -13,13 +14,42 @@ export class PatientController {
 		this.cryptoService = new CryptoService()
 	}
 
+	private async formatFiles(files: any[]) {
+		return Promise.all(
+			files.map(async (file) => {
+				const url = await storageService.getSignedUrl(file.storageKey)
+				return {
+					id: file.id,
+					fileName: file.fileName,
+					fileType: file.fileType,
+					mimeType: file.mimeType,
+					uploadedAt: file.createdAt,
+					uploadedBy: file.uploadedByUser ? {
+						id: file.uploadedByUser.id,
+						name: file.uploadedByUser.name,
+						email: file.uploadedByUser.email,
+					} : null,
+					url,
+				}
+			})
+		)
+	}
+
 	async getAll(req: FastifyRequest, res: FastifyReply) {
 		try {
 			const patients = await this.patientRepository.findAll()
 
+			// Formatar arquivos com URLs
+			const patientsWithFiles = await Promise.all(
+				patients.map(async (patient) => ({
+					...patient,
+					files: patient.files ? await this.formatFiles(patient.files) : [],
+				}))
+			)
+
 			return res.status(200).send({
 				message: 'Patients retrieved successfully',
-				data: patients,
+				data: patientsWithFiles,
 			})
 		} catch (error) {
 			console.error('Error retrieving patients:', error)
@@ -41,9 +71,15 @@ export class PatientController {
 				return res.status(404).send({ error: 'Patient not found' })
 			}
 
+			// Formatar arquivos com URLs
+			const patientWithFiles = {
+				...patient,
+				files: patient.files ? await this.formatFiles(patient.files) : [],
+			}
+
 			return res.status(200).send({
 				message: 'Patient retrieved successfully',
-				data: patient,
+				data: patientWithFiles,
 			})
 		} catch (error) {
 			console.error('Error retrieving patient:', error)

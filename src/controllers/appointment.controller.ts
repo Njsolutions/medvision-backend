@@ -9,6 +9,7 @@ import {
 } from '@/schemas/appointment.schema'
 import { createDailyService } from '@/services/daily.service'
 import { auditService } from '@/services/audit.service'
+import { storageService } from '@/services/storage.service'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class AppointmentController {
@@ -18,6 +19,27 @@ export class AppointmentController {
 	constructor(_fastify: FastifyInstance) {
 		this.appointmentRepository = new AppointmentRepository()
 		this.dailyService = createDailyService()
+	}
+
+	private async formatFiles(files: any[]) {
+		return Promise.all(
+			files.map(async (file) => {
+				const url = await storageService.getSignedUrl(file.storageKey)
+				return {
+					id: file.id,
+					fileName: file.fileName,
+					fileType: file.fileType,
+					mimeType: file.mimeType,
+					uploadedAt: file.createdAt,
+					uploadedBy: file.uploadedByUser ? {
+						id: file.uploadedByUser.id,
+						name: file.uploadedByUser.name,
+						email: file.uploadedByUser.email,
+					} : null,
+					url,
+				}
+			})
+		)
 	}
 
 	async create(req: FastifyRequest, res: FastifyReply) {
@@ -110,10 +132,19 @@ export class AppointmentController {
 				)
 			}
 
+			// Formatar arquivos do paciente
+			const appointmentWithFiles = {
+				...appointment,
+				patient: {
+					...appointment.patient,
+					files: appointment.patient.files ? await this.formatFiles(appointment.patient.files) : [],
+				},
+			}
+
 			return res.status(201).send({
 				message: 'Appointment created successfully',
 				data: {
-					appointment,
+					appointment: appointmentWithFiles,
 					roomUrl: dailyRoom.url,
 					patientToken,
 					doctorToken,
@@ -298,9 +329,20 @@ export class AppointmentController {
 
 			const result = await this.appointmentRepository.findAll(filters)
 
+			// Formatar arquivos com URLs para cada appointment
+			const appointmentsWithFiles = await Promise.all(
+				result.appointments.map(async (appointment) => ({
+					...appointment,
+					patient: {
+						...appointment.patient,
+						files: appointment.patient.files ? await this.formatFiles(appointment.patient.files) : [],
+					},
+				}))
+			)
+
 			return res.status(200).send({
 				message: 'Appointments retrieved successfully',
-				data: result.appointments,
+				data: appointmentsWithFiles,
 				pagination: result.pagination,
 			})
 		} catch (error) {

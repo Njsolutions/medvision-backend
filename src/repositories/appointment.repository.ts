@@ -20,6 +20,24 @@ export class AppointmentRepository {
 								updatedAt: true,
 							},
 						},
+						files: {
+							where: {
+								deletedAt: null,
+							},
+							include: {
+								uploadedByUser: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+										role: true,
+									},
+								},
+							},
+							orderBy: {
+								createdAt: 'desc',
+							},
+						},
 					},
 				},
 				doctor: {
@@ -78,6 +96,24 @@ export class AppointmentRepository {
 								active: true,
 								createdAt: true,
 								updatedAt: true,
+							},
+						},
+						files: {
+							where: {
+								deletedAt: null,
+							},
+							include: {
+								uploadedByUser: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+										role: true,
+									},
+								},
+							},
+							orderBy: {
+								createdAt: 'desc',
 							},
 						},
 					},
@@ -300,6 +336,23 @@ export class AppointmentRepository {
 									active: true,
 									createdAt: true,
 									updatedAt: true,
+								},
+							},
+							files: {
+								where: {
+									deletedAt: null,
+								},
+								include: {
+									uploadedByUser: {
+										select: {
+											id: true,
+											name: true,
+											email: true,
+										},
+									},
+								},
+								orderBy: {
+									createdAt: 'desc',
 								},
 							},
 						},

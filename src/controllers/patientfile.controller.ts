@@ -7,6 +7,7 @@ import {
 	GetFileUrlSchema,
 	ListPatientFilesSchema,
 	DeleteFileSchema,
+	DownloadFileSchema,
 } from '@/schemas/patientfile.schema'
 
 export class PatientFileController {
@@ -20,16 +21,42 @@ export class PatientFileController {
 			// Validação de multipart
 			const data = await req.file()
 
+			console.log('📥 Upload request received')
+
 			if (!data) {
+				console.log('❌ No file provided in request')
 				return res.status(400).send({ error: 'No file provided' })
 			}
 
+			console.log('📄 File data:', {
+				filename: data.filename,
+				mimetype: data.mimetype,
+				encoding: data.encoding,
+			})
+
 			// Obter campos do formulário
 			const fields = data.fields as Record<string, { value: string }>
-			const patientId = fields.patientId?.value
-			const fileType = fields.fileType?.value
+			
+			// Log seguro dos campos (evitando referências circulares)
+			const fieldKeys = Object.keys(fields)
+			console.log('📋 Fields received:', fieldKeys)
+			const fieldValues: Record<string, any> = {}
+			for (const key of fieldKeys) {
+				fieldValues[key] = fields[key]?.value || fields[key]
+			}
+			console.log('📋 Field values:', fieldValues)
+
+			const patientId = fields.patientId?.value || (fields.patientId as any)
+			const fileType = fields.fileType?.value || (fields.fileType as any)
+
+			console.log('🔍 Extracted values:', { patientId, fileType })
 
 			if (!patientId || !fileType) {
+				console.log('❌ Missing required fields:', {
+					patientId: patientId || 'MISSING',
+					fileType: fileType || 'MISSING',
+					allFields: Object.keys(fields),
+				})
 				return res.status(400).send({
 					error: 'Missing required fields: patientId and fileType',
 				})
@@ -41,8 +68,15 @@ export class PatientFileController {
 			const mimeType = data.mimetype
 			const fileSize = buffer.length
 
+			console.log('📦 File details:', {
+				fileName,
+				mimeType,
+				fileSize: `${(fileSize / 1024 / 1024).toFixed(2)} MB`,
+			})
+
 			// Validar tamanho do arquivo
 			if (!storageService.validateFileSize(fileSize)) {
+				console.log('❌ File size exceeds limit:', fileSize)
 				return res.status(400).send({
 					error: 'File size exceeds maximum limit of 50MB',
 				})
@@ -50,6 +84,7 @@ export class PatientFileController {
 
 			// Validar tipo MIME
 			if (!storageService.validateMimeType(mimeType)) {
+				console.log('❌ Invalid MIME type:', mimeType)
 				return res.status(400).send({
 					error: 'Invalid file type. Only images, PDFs, and documents are allowed',
 				})
@@ -57,11 +92,15 @@ export class PatientFileController {
 
 			// Gerar chave de armazenamento
 			const storageKey = storageService.generateStorageKey(patientId, fileName)
+			console.log('🔑 Generated storage key:', storageKey)
 
 			// Upload para R2
+			console.log('☁️ Uploading to R2...')
 			await storageService.uploadFile(buffer, storageKey, mimeType)
+			console.log('✅ Upload to R2 successful')
 
 			// Salvar metadados no banco
+			console.log('💾 Saving metadata to database...')
 			const file = await patientFileRepository.create({
 				patientId,
 				fileName,
@@ -71,8 +110,10 @@ export class PatientFileController {
 				storageKey,
 				uploadedBy: req.user?.id || 'system',
 			})
+			console.log('✅ Metadata saved, file ID:', file.id)
 
 			// Audit log
+			console.log('📝 Creating audit log...')
 			await auditService.log({
 				userId: req.user?.id || 'system',
 				action: 'PATIENT_FILE_UPLOAD',
@@ -88,12 +129,13 @@ export class PatientFileController {
 				userAgent: req.headers['user-agent'],
 			})
 
+			console.log('🎉 Upload completed successfully!')
 			return res.status(201).send({
 				message: 'File uploaded successfully',
 				data: file,
 			})
 		} catch (error) {
-			console.error('Error uploading file:', error)
+			console.error('❌ Error uploading file:', error)
 			return res.status(500).send({ error: 'Failed to upload file' })
 		}
 	}
@@ -269,6 +311,58 @@ export class PatientFileController {
 		} catch (error) {
 			console.error('Error getting file stats:', error)
 			return res.status(500).send({ error: 'Failed to get file statistics' })
+		}
+	}
+
+	/**
+	 * Download de arquivo
+	 */
+	async downloadFile(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const params = DownloadFileSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({
+					error: 'Invalid file ID',
+					details: params.error,
+				})
+			}
+
+			const file = await patientFileRepository.findById(params.data.id)
+
+			if (!file) {
+				return res.status(404).send({ error: 'File not found' })
+			}
+
+			// Obter arquivo do storage
+			const fileData = await storageService.downloadFile(file.storageKey)
+
+			// Audit log - registrar quem fez o download
+			await auditService.log({
+				userId: req.user?.id || 'system',
+				action: 'PATIENT_FILE_DOWNLOAD',
+				description: `Downloaded file ${file.fileName} for patient ${file.patientId}`,
+				content: {
+					fileId: file.id,
+					fileName: file.fileName,
+					fileSize: file.fileSize,
+					patientId: file.patientId,
+					downloadedBy: req.user?.name || 'Unknown',
+				},
+				impactLevel: 'medium',
+				ipAddress: req.ip,
+				userAgent: req.headers['user-agent'],
+			})
+
+			// Configurar headers para download
+			res.header('Content-Type', fileData.contentType)
+			res.header('Content-Disposition', `attachment; filename="${file.fileName}"`)
+
+			// Retornar o arquivo como stream
+			return res.send(fileData.body)
+		} catch (error) {
+			console.error('Error downloading file:', error)
+			return res.status(500).send({ error: 'Failed to download file' })
 		}
 	}
 }
