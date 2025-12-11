@@ -22,11 +22,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  master    Master?
-  admin     Admin?
-  doctor    Doctor?
-  patient   Patient?
-  auditLogs AuditLog[]
+  master       Master?
+  admin        Admin?
+  doctor       Doctor?
+  patient      Patient?
+  auditLogs    AuditLog[]
+  triagens     Triagem[]
+  patientFiles PatientFile[]
 
   @@map("users")
 }
@@ -96,6 +98,8 @@ model Patient {
   requests      Request[]
   anamises      Anaminese[]
   uti           Uti?
+  triagens      Triagem[]
+  files         PatientFile[]
 
   @@map("patients")
 }
@@ -114,6 +118,77 @@ model Uti {
   @@map("utis")
 }
 
+model Triagem {
+  id            String       @id @default(uuid())
+  patientId     String
+  patient       Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  // Sinais Vitais
+  frequenciaCardiaca      Float?
+  frequenciaCardiacaUnit  String? // BPM
+  frequenciaCardiacaInstr String? // OXIMETRO DE PULSO, etc
+
+  frequenciaRespiratoria      Float?
+  frequenciaRespiratoriaUnit  String? // RPM
+  frequenciaRespiratoriaInstr String? // VISUAL (VISAO), etc
+
+  spo2      Float?
+  spo2Unit  String? // %
+  spo2Instr String? // OXIMETRO DE PULSO
+
+  temperatura      Float?
+  temperaturaUnit  String? // °C
+  temperaturaInstr String? // TERMOMETRO
+
+  pressaoArterialSistolica  Float?
+  pressaoArterialDiastolica Float?
+  pressaoArterialUnit       String? // MMHG
+  pressaoArterialInstr      String? // ESFIGMOMANOMETRO
+
+  pam Float? // P.A.M.: -
+
+  glicemia      Float?
+  glicemiaUnit  String? // MG/DL
+  glicemiaInstr String? // GLICOSIMENTRO
+
+  pressaoVenosaCentral      Float?
+  pressaoVenosaCentralUnit  String?
+  pressaoVenosaCentralInstr String?
+
+  pressaoIntracraniana      Float?
+  pressaoIntracranianaUnit  String? // MMHG
+  pressaoIntracranianaInstr String? // MONITOR
+
+  // Medidas
+  capnografia      Float?
+  capnografiaUnit  String? // MMHG
+  capnografiaInstr String? // CAPNOGRAFO
+
+  peso      Float?
+  pesoUnit  String? // KG
+  pesoInstr String? // BALANCA
+
+  altura      Float?
+  alturaUnit  String? // CM
+  alturaInstr String? // REGUA OU TRENA
+
+  perimetroCefalico      Float?
+  perimetroCefalicoUnit  String? // CM
+  perimetroCefalicoInstr String? // FITA METRICA
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([userId])
+  @@index([appointmentId])
+  @@map("triagens")
+}
+
 // Junction Models
 
 model Appointment {
@@ -121,7 +196,7 @@ model Appointment {
   patientId       String
   doctorId        String
   appointmentDate DateTime          @db.Timestamptz(6)
-  reason          String
+  reason          String?
   status          AppointmentStatus @default(scheduled)
   notes           String?
   roomName        String?
@@ -134,6 +209,7 @@ model Appointment {
   doctor          Doctor            @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   patient         Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
   prescriptions   Prescription[]
+  triagens        Triagem[]
 
   @@unique([patientId, doctorId, appointmentDate])
   @@index([doctorId])
@@ -216,6 +292,34 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+model PatientFile {
+  id        String   @id @default(uuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  // Metadados
+  fileName String
+  fileType String
+  mimeType String
+  fileSize Int // bytes
+
+  // Storage
+  storageKey String  @unique // chave no S3/R2
+  storageUrl String? // URL pública (se aplicável)
+
+  // Segurança
+  uploadedBy     String
+  uploadedByUser User   @relation(fields: [uploadedBy], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete
+
+  @@index([patientId])
+  @@index([fileType])
+  @@map("patient_files")
+}
+
 // Enums
 
 enum Roles {
@@ -270,4 +374,13 @@ enum ImpactLevel {
   medium // Médio impacto - criação/atualização de dados
   high // Alto impacto - exclusão ou alteração de dados sensíveis
   critical // Crítico - alterações de segurança ou configurações do sistema
+}
+
+enum FileCategory {
+  EXAM_RESULT // Resultado de exames
+  MEDICAL_IMAGE // Imagens médicas (RX, tomografia)
+  PRESCRIPTION // Receitas médicas
+  DOCUMENT // Documentos gerais
+  REPORT // Laudos
+  CONSENT_FORM // Termos de consentimento
 }

@@ -42,4 +42,28 @@ export class JwtService {
 			return null
 		}
 	}
+
+	generatePasswordResetToken(email: string): string {
+		const expiresIn = 15 * 60 // 15 minutos em segundos
+		const payload = {
+			email,
+			type: 'password-reset',
+			iat: Math.floor(Date.now() / 1000),
+			exp: Math.floor(Date.now() / 1000) + expiresIn,
+		}
+
+		return this.fastify.jwt.sign(payload, { expiresIn: `${expiresIn}s` })
+	}
+
+	verifyPasswordResetToken(token: string): { email: string } | null {
+		try {
+			const decoded = this.fastify.jwt.verify(token) as any
+			if (decoded.type !== 'password-reset') {
+				return null
+			}
+			return { email: decoded.email }
+		} catch {
+			return null
+		}
+	}
 }

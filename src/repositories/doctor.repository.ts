@@ -2,6 +2,29 @@ import { db } from '@/lib/prisma'
 import type { CreateDoctorInput, UpdateDoctorInput } from '@/schemas/doctor.schema'
 
 export class DoctorRepository {
+	async findAll() {
+		return db.doctor.findMany({
+			include: {
+				user: {
+					select: {
+						id: true,
+						name: true,
+						cpf: true,
+						phone: true,
+						email: true,
+						active: true,
+						role: true,
+						createdAt: true,
+						updatedAt: true,
+					},
+				},
+			},
+			orderBy: {
+				createdAt: 'desc',
+			},
+		})
+	}
+
 	async findById(id: string) {
 		return db.doctor.findUnique({
 			where: { id },

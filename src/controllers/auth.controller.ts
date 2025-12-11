@@ -4,10 +4,12 @@ import {
 	RequestPasswordResetSchema,
 	ResetPasswordSchema,
 	SignInSchema,
+	ValidateResetCodeSchema,
 } from '@/schemas/auth.schema'
 import { CryptoService } from '@/services/crypto.service'
 import { JwtService } from '@/services/jwt.service'
 import { auditService } from '@/services/audit.service'
+import { emailService } from '@/services/email.service'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class AuthController {
@@ -24,19 +26,19 @@ export class AuthController {
 	async register(req: FastifyRequest, res: FastifyReply) {
 		try {
 			if (req.user !== 'master' && req.user?.role !== 'admin') {
-				return res.status(403).send({ error: 'Insufficient permissions to register a new user' })
+				return res.status(403).send({ error: 'Permissões insuficientes para registrar um novo usuário' })
 			}
 
 			const data = RegisterUserSchema.safeParse(req.body)
 
 			if (!data.success) {
-				return res.status(400).send({ error: 'Invalid request data', details: data.error })
+				return res.status(400).send({ error: 'Dados da requisição inválidos', details: data.error })
 			}
 
 			const existingUser = await this.userRepository.findByCPF(data.data.cpf)
 
 			if (existingUser) {
-				return res.status(409).send({ error: 'User with this CPF already exists' })
+				return res.status(409).send({ error: 'Usuário com este CPF já existe' })
 			}
 
 			const passwordGeneration = this.cryptoService.generateRandomCode(8)
@@ -60,7 +62,7 @@ export class AuthController {
 			return newUser
 		} catch (error) {
 			console.error('Error during user registration:', error)
-			return res.status(500).send({ error: 'Internal server error' })
+			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
 
@@ -69,19 +71,19 @@ export class AuthController {
 			const data = SignInSchema.safeParse(req.body)
 
 			if (!data.success) {
-				return res.status(400).send({ error: 'Invalid request data', details: data.error })
+				return res.status(400).send({ error: 'Dados da requisição inválidos', details: data.error })
 			}
 
 			const existingUser = await this.userRepository.findByEmail(data.data.email)
 
 			if (!existingUser) {
-				return res.status(401).send({ error: 'Invalid email or password' })
+				return res.status(401).send({ error: 'Email ou senha inválidos' })
 			}
 
 			const isPasswordValid = this.cryptoService.comparePassword(data.data.password, existingUser.password)
 
 			if (!(await isPasswordValid)) {
-				return res.status(401).send({ error: 'Invalid email or password' })
+				return res.status(401).send({ error: 'Email ou senha inválidos' })
 			}
 
 			const { token, refreshToken, expiresIn } = this.jwtService.generateToken(
@@ -96,7 +98,7 @@ export class AuthController {
 			}
 
 			return res.status(200).send({
-				message: 'Sign-in successful',
+				message: 'Login realizado com sucesso',
 				data: {
 					token,
 					refreshToken,
@@ -105,7 +107,7 @@ export class AuthController {
 			})
 		} catch (error) {
 			console.error('Error during user sign-in:', error)
-			return res.status(500).send({ error: 'Internal server error' })
+			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
 
@@ -114,23 +116,63 @@ export class AuthController {
 			const data = RequestPasswordResetSchema.safeParse(req.body)
 
 			if (!data.success) {
-				return res.status(400).send({ error: 'Invalid request data', details: data.error })
+				return res.status(400).send({ error: 'Dados da requisição inválidos', details: data.error })
 			}
 
 			const existingUser = await this.userRepository.findByEmail(data.data.email)
 
 			if (!existingUser) {
-				return res.status(404).send({ error: 'User with this email does not exist' })
+				return res.status(404).send({ error: 'Usuário com este email não existe' })
 			}
 
-			const resetCode = this.cryptoService.generateRandomCode(6)
+		const resetCode = this.cryptoService.generateRandomCode(6)
 
-			await this.userRepository.updateResetCode(existingUser.id, resetCode)
+		await this.userRepository.updateResetCode(existingUser.id, resetCode)
 
-			return res.status(200).send({ message: 'Password reset code sent to email' })
+		// Envia o código de recuperação por email
+		await emailService.sendPasswordRecoveryCode(existingUser.email, {
+			name: existingUser.name,
+			recoveryCode: resetCode,
+			expiresIn: '15 minutos',
+		})
+
+		return res.status(200).send({ message: 'Código de redefinição de senha enviado para o email' })
 		} catch (error) {
 			console.error('Error during password reset request:', error)
-			return res.status(500).send({ error: 'Internal server error' })
+			return res.status(500).send({ error: 'Erro interno do servidor' })
+		}
+	}
+
+	async validateResetCode(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const data = ValidateResetCodeSchema.safeParse(req.body)
+
+			if (!data.success) {
+				return res.status(400).send({ error: 'Dados da requisição inválidos', details: data.error })
+			}
+
+			const existingUser = await this.userRepository.findByEmail(data.data.email)
+
+			if (!existingUser || existingUser.resetCode !== data.data.resetCode) {
+				return res.status(400).send({ error: 'Email ou código de redefinição inválidos' })
+			}
+
+			// Gera um token temporário válido por 15 minutos
+			const resetToken = this.jwtService.generatePasswordResetToken(existingUser.email)
+
+			// Limpa o código de reset do banco de dados por segurança
+			await this.userRepository.updateResetCode(existingUser.id, null)
+
+			return res.status(200).send({
+				message: 'Código de redefinição válido',
+				data: {
+					resetToken,
+					expiresIn: 900, // 15 minutos em segundos
+				},
+			})
+		} catch (error) {
+			console.error('Error during reset code validation:', error)
+			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
 
@@ -139,13 +181,20 @@ export class AuthController {
 			const data = ResetPasswordSchema.safeParse(req.body)
 
 			if (!data.success) {
-				return res.status(400).send({ error: 'Invalid request data', details: data.error })
+				return res.status(400).send({ error: 'Dados da requisição inválidos', details: data.error })
 			}
 
-			const existingUser = await this.userRepository.findByEmail(data.data.email)
+			// Verifica e decodifica o token de reset
+			const tokenData = this.jwtService.verifyPasswordResetToken(data.data.resetToken)
+
+			if (!tokenData) {
+				return res.status(400).send({ error: 'Token de redefinição inválido ou expirado' })
+			}
+
+			const existingUser = await this.userRepository.findByEmail(tokenData.email)
 
 			if (!existingUser) {
-				return res.status(400).send({ error: 'Invalid email or reset code' })
+				return res.status(404).send({ error: 'Usuário não encontrado' })
 			}
 
 			const newPasswordHash = await this.cryptoService.hashPassword(data.data.newPassword)
@@ -157,10 +206,10 @@ export class AuthController {
 				await auditService.logPasswordReset(existingUser.id, req.auditContext)
 			}
 
-			return res.status(200).send({ message: 'Password has been reset successfully' })
+			return res.status(200).send({ message: 'Senha redefinida com sucesso' })
 		} catch (error) {
 			console.error('Error during password reset:', error)
-			return res.status(500).send({ error: 'Internal server error' })
+			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
 
@@ -169,26 +218,26 @@ export class AuthController {
 			const userId = req.user?.id
 
 			if (!userId) {
-				return res.status(401).send({ error: 'Unauthorized' })
+				return res.status(401).send({ error: 'Não autorizado' })
 			}
 
 			const user = await this.userRepository.findById(userId)
 
 			if (!user) {
-				return res.status(404).send({ error: 'User not found' })
+				return res.status(404).send({ error: 'Usuário não encontrado' })
 			}
 
 			const { password: _, ...userWithoutPassword } = user
 
 			return res.status(200).send({
-				message: 'User profile retrieved successfully',
+				message: 'Perfil do usuário recuperado com sucesso',
 				data: {
 					user: userWithoutPassword,
 				},
 			})
 		} catch (error) {
 			console.error('Error retrieving user profile:', error)
-			return res.status(500).send({ error: 'Internal server error' })
+			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
 }

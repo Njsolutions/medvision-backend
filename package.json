@@ -29,10 +29,13 @@
 		"typescript": "^5.9.3"
 	},
 	"dependencies": {
+		"@aws-sdk/client-s3": "^3.948.0",
+		"@aws-sdk/s3-request-presigner": "^3.948.0",
 		"@daily-co/daily-js": "^0.85.0",
 		"@fastify/cookie": "^11.0.2",
 		"@fastify/cors": "^11.1.0",
 		"@fastify/jwt": "^10.0.0",
+		"@fastify/multipart": "^9.3.0",
 		"@fastify/swagger": "^9.6.0",
 		"@prisma/adapter-pg": "^6.19.0",
 		"@prisma/client": "^6.19.0",

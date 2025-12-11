@@ -13,6 +13,44 @@ export class PatientController {
 		this.cryptoService = new CryptoService()
 	}
 
+	async getAll(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const patients = await this.patientRepository.findAll()
+
+			return res.status(200).send({
+				message: 'Patients retrieved successfully',
+				data: patients,
+			})
+		} catch (error) {
+			console.error('Error retrieving patients:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async getById(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const params = PatientIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'Invalid patient ID', details: params.error })
+			}
+
+			const patient = await this.patientRepository.findByIdComplete(params.data.id)
+
+			if (!patient) {
+				return res.status(404).send({ error: 'Patient not found' })
+			}
+
+			return res.status(200).send({
+				message: 'Patient retrieved successfully',
+				data: patient,
+			})
+		} catch (error) {
+			console.error('Error retrieving patient:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
 	async create(req: FastifyRequest, res: FastifyReply) {
 		try {
 			/* if (req.user !== 'master' && req.user?.role !== 'admin') {

@@ -15,7 +15,7 @@ export class DoctorController {
 
 	async create(req: FastifyRequest, res: FastifyReply) {
 		try {
-			if (req.user !== 'master' && req.user?.role !== 'admin') {
+			if (req.user.role !== 'master' && req.user?.role !== 'admin') {
 				return res.status(403).send({ error: 'Insufficient permissions to create doctor' })
 			}
 
@@ -76,7 +76,7 @@ export class DoctorController {
 
 	async update(req: FastifyRequest, res: FastifyReply) {
 		try {
-			if (req.user !== 'master' && req.user?.role !== 'admin') {
+			if (req.user.role !== 'master' && req.user?.role !== 'admin') {
 				return res.status(403).send({ error: 'Insufficient permissions to update doctor' })
 			}
 
@@ -132,6 +132,53 @@ export class DoctorController {
 			})
 		} catch (error) {
 			console.error('Error updating doctor:', error)
+				return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async getAll(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (req.user.role !== 'master' && req.user?.role !== 'admin') {
+				return res.status(403).send({ error: 'Insufficient permissions to list doctors' })
+			}
+
+			const doctors = await this.doctorRepository.findAll()
+
+			return res.status(200).send({
+				message: 'Doctors retrieved successfully',
+				data: doctors,
+				count: doctors.length,
+			})
+		} catch (error) {
+			console.error('Error listing doctors:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async getById(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (req.user.role !== 'master' && req.user?.role !== 'admin') {
+				return res.status(403).send({ error: 'Insufficient permissions to view doctor' })
+			}
+
+			const params = DoctorIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'Invalid doctor ID', details: params.error })
+			}
+
+			const doctor = await this.doctorRepository.findById(params.data.id)
+
+			if (!doctor) {
+				return res.status(404).send({ error: 'Doctor not found' })
+			}
+
+			return res.status(200).send({
+				message: 'Doctor retrieved successfully',
+				data: doctor,
+			})
+		} catch (error) {
+			console.error('Error fetching doctor:', error)
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}

@@ -1,5 +1,12 @@
 import { AppointmentRepository } from '@/repositories/appointment.repository'
-import { CreateAppointmentSchema, UpdateAppointmentSchema, AppointmentIdSchema } from '@/schemas/appointment.schema'
+import { 
+	CreateAppointmentSchema, 
+	UpdateAppointmentSchema, 
+	AppointmentIdSchema, 
+	ListAppointmentsSchema,
+	AddPatientFeedbackSchema,
+	AddDoctorFeedbackSchema 
+} from '@/schemas/appointment.schema'
 import { createDailyService } from '@/services/daily.service'
 import { auditService } from '@/services/audit.service'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
@@ -15,9 +22,9 @@ export class AppointmentController {
 
 	async create(req: FastifyRequest, res: FastifyReply) {
 		try {
-			/* if (req.user !== 'master' && req.user?.role !== 'admin' && req.user?.role !== 'doctor') {
+			if (req.user.role !== 'master' && req.user?.role !== 'admin' && req.user?.role !== 'doctor') {
 				return res.status(403).send({ error: 'Insufficient permissions to create appointment' })
-			} */
+			}
 
 			const data = CreateAppointmentSchema.safeParse(req.body)
 
@@ -244,6 +251,166 @@ export class AppointmentController {
 			})
 		} catch (error) {
 			console.error('Error updating appointment:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async list(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const query = ListAppointmentsSchema.safeParse(req.query)
+
+			if (!query.success) {
+				return res.status(400).send({ error: 'Invalid query parameters', details: query.error })
+			}
+
+			const filters: {
+				status?: 'scheduled' | 'inProgress' | 'completed' | 'cancelled' | 'noShow'
+				patientId?: string
+				doctorId?: string
+				startDate?: Date
+				endDate?: Date
+				page: number
+				limit: number
+			} = {
+				page: query.data.page,
+				limit: query.data.limit,
+			}
+
+			if (query.data.status) {
+				filters.status = query.data.status
+			}
+
+			if (query.data.patientId) {
+				filters.patientId = query.data.patientId
+			}
+
+			if (query.data.doctorId) {
+				filters.doctorId = query.data.doctorId
+			}
+
+			if (query.data.startDate) {
+				filters.startDate = new Date(query.data.startDate)
+			}
+
+			if (query.data.endDate) {
+				filters.endDate = new Date(query.data.endDate)
+			}
+
+			const result = await this.appointmentRepository.findAll(filters)
+
+			return res.status(200).send({
+				message: 'Appointments retrieved successfully',
+				data: result.appointments,
+				pagination: result.pagination,
+			})
+		} catch (error) {
+			console.error('Error listing appointments:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async addPatientFeedback(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const params = AppointmentIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'Invalid appointment ID', details: params.error })
+			}
+
+			const data = AddPatientFeedbackSchema.safeParse(req.body)
+
+			if (!data.success) {
+				return res.status(400).send({ error: 'Invalid request data', details: data.error })
+			}
+
+			const appointment = await this.appointmentRepository.findById(params.data.id)
+
+			if (!appointment) {
+				return res.status(404).send({ error: 'Appointment not found' })
+			}
+
+			// Verificar se a consulta foi concluída
+			if (appointment.status !== 'completed') {
+				return res.status(400).send({ error: 'Feedback can only be added to completed appointments' })
+			}
+
+			// Verificar se já existe feedback do paciente
+			if (appointment.feedbackPatient) {
+				return res.status(400).send({ error: 'Patient feedback has already been provided' })
+			}
+
+			const updatedAppointment = await this.appointmentRepository.update(params.data.id, {
+				feedbackPatient: data.data.feedbackPatient,
+			})
+
+			// Registra no log de auditoria
+			if (req.user?.id && req.auditContext) {
+				await auditService.logAppointmentPatientFeedback(
+					req.user.id,
+					params.data.id,
+					req.auditContext
+				)
+			}
+
+			return res.status(200).send({
+				message: 'Patient feedback added successfully',
+				data: updatedAppointment,
+			})
+		} catch (error) {
+			console.error('Error adding patient feedback:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async addDoctorFeedback(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const params = AppointmentIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'Invalid appointment ID', details: params.error })
+			}
+
+			const data = AddDoctorFeedbackSchema.safeParse(req.body)
+
+			if (!data.success) {
+				return res.status(400).send({ error: 'Invalid request data', details: data.error })
+			}
+
+			const appointment = await this.appointmentRepository.findById(params.data.id)
+
+			if (!appointment) {
+				return res.status(404).send({ error: 'Appointment not found' })
+			}
+
+			// Verificar se a consulta foi concluída
+			if (appointment.status !== 'completed') {
+				return res.status(400).send({ error: 'Feedback can only be added to completed appointments' })
+			}
+
+			// Verificar se já existe feedback do médico
+			if (appointment.feedbackDoctor) {
+				return res.status(400).send({ error: 'Doctor feedback has already been provided' })
+			}
+
+			const updatedAppointment = await this.appointmentRepository.update(params.data.id, {
+				feedbackDoctor: data.data.feedbackDoctor,
+			})
+
+			// Registra no log de auditoria
+			if (req.user?.id && req.auditContext) {
+				await auditService.logAppointmentDoctorFeedback(
+					req.user.id,
+					params.data.id,
+					req.auditContext
+				)
+			}
+
+			return res.status(200).send({
+				message: 'Doctor feedback added successfully',
+				data: updatedAppointment,
+			})
+		} catch (error) {
+			console.error('Error adding doctor feedback:', error)
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}

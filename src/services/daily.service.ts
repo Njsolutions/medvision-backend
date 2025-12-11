@@ -47,7 +47,9 @@ export function createDailyService(): DailyService {
 						enable_knocking: false,
 						enable_network_ui: false,
 						enable_prejoin_ui: true,
+						eject_at_room_exp: false, // Não ejeta usuários quando a sala expirar
 					},
+					// Não definir 'exp' para que a sala seja permanente
 				}),
 			})
 

@@ -217,6 +217,38 @@ export class AuditService {
     })
   }
 
+  async logAppointmentPatientFeedback(
+    userId: string,
+    appointmentId: string,
+    context: AuditContext
+  ): Promise<void> {
+    await this.log({
+      userId,
+      action: 'APPOINTMENT_PATIENT_FEEDBACK',
+      description: 'Adicionou feedback de paciente na consulta',
+      content: { appointmentId },
+      impactLevel: ImpactLevel.LOW,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    })
+  }
+
+  async logAppointmentDoctorFeedback(
+    userId: string,
+    appointmentId: string,
+    context: AuditContext
+  ): Promise<void> {
+    await this.log({
+      userId,
+      action: 'APPOINTMENT_DOCTOR_FEEDBACK',
+      description: 'Adicionou feedback de médico na consulta',
+      content: { appointmentId },
+      impactLevel: ImpactLevel.LOW,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    })
+  }
+
   /**
    * Logs de prescrições
    */

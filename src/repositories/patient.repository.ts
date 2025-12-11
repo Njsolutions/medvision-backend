@@ -2,6 +2,29 @@ import { db } from '@/lib/prisma'
 import type { CreatePatientInput, UpdatePatientInput } from '@/schemas/patient.schema'
 
 export class PatientRepository {
+	async findAll() {
+		return db.patient.findMany({
+			include: {
+				user: {
+					select: {
+						id: true,
+						name: true,
+						cpf: true,
+						phone: true,
+						email: true,
+						active: true,
+						role: true,
+						createdAt: true,
+						updatedAt: true,
+					},
+				},
+			},
+			orderBy: {
+				createdAt: 'desc',
+			},
+		})
+	}
+
 	async findById(id: string) {
 		return db.patient.findUnique({
 			where: { id },
@@ -19,6 +42,109 @@ export class PatientRepository {
 						updatedAt: true,
 					},
 				},
+			},
+		})
+	}
+
+	async findByIdComplete(id: string) {
+		return db.patient.findUnique({
+			where: { id },
+			include: {
+				user: {
+					select: {
+						id: true,
+						name: true,
+						cpf: true,
+						phone: true,
+						email: true,
+						active: true,
+						role: true,
+						createdAt: true,
+						updatedAt: true,
+					},
+				},
+				appointments: {
+					include: {
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+										phone: true,
+									},
+								},
+							},
+						},
+						prescriptions: true,
+					},
+					orderBy: {
+						appointmentDate: 'desc',
+					},
+				},
+				prescriptions: {
+					include: {
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+						appointment: {
+							select: {
+								id: true,
+								appointmentDate: true,
+								reason: true,
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
+				requests: {
+					include: {
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
+				anamises: {
+					include: {
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
+				uti: true,
 			},
 		})
 	}

@@ -1,19 +1,64 @@
 import { UtiRepository } from '@/repositories/uti.repository'
 import { CreateUtiSchema, UpdateUtiSchema, UtiIdSchema } from '@/schemas/uti.schema'
 import { auditService } from '@/services/audit.service'
+import { createDailyService } from '@/services/daily.service'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export class UtiController {
 	private utiRepository: UtiRepository
+	private dailyService: ReturnType<typeof createDailyService>
 
 	constructor() {
 		this.utiRepository = new UtiRepository()
+		this.dailyService = createDailyService()
+	}
+
+	async createEmpty(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (req.user?.role !== 'master' && req.user?.role !== 'admin') {
+				return res.status(403).send({ error: 'Insufficient permissions to create UTI bed' })
+			}
+
+			// Primeiro cria o leito para obter o ID
+			const uti = await this.utiRepository.create({
+				patientId: null,
+				status: 'available',
+				roomLink: null,
+			})
+
+			// Gera sala fixa do Daily.co para este leito
+			try {
+				const roomName = `uti-bed-${uti.id}`
+				const room = await this.dailyService.createRoom(roomName, uti.id)
+				
+				// Atualiza o leito com o link da sala
+				const updatedUti = await this.utiRepository.update(uti.id, {
+					roomLink: room.url,
+				})
+
+				return res.status(201).send({
+					message: 'Empty UTI bed created successfully with video room',
+					data: updatedUti,
+				})
+			} catch (dailyError) {
+				console.error('Error creating Daily.co room for UTI bed:', dailyError)
+				// Retorna o leito mesmo sem a sala, mas alerta o erro
+				return res.status(201).send({
+					message: 'UTI bed created but failed to create video room',
+					data: uti,
+					warning: 'Video room creation failed',
+				})
+			}
+		} catch (error) {
+			console.error('Error creating empty UTI bed:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
 	}
 
 	async create(req: FastifyRequest, res: FastifyReply) {
 		try {
-			if (req.user !== 'master' && req.user?.role !== 'admin') {
-				return res.status(403).send({ error: 'Insufficient permissions to create UTI' })
+			if (req.user?.role !== 'master' && req.user?.role !== 'admin') {
+				return res.status(403).send({ error: 'Insufficient permissions to create UTI bed' })
 			}
 
 			const data = CreateUtiSchema.safeParse(req.body)
@@ -22,6 +67,7 @@ export class UtiController {
 				return res.status(400).send({ error: 'Invalid request data', details: data.error })
 			}
 
+			// Validação apenas se houver paciente
 			if (data.data.patientId) {
 				const patientExists = await this.utiRepository.checkPatientExists(data.data.patientId)
 
@@ -32,39 +78,104 @@ export class UtiController {
 				const patientHasUti = await this.utiRepository.checkPatientHasUti(data.data.patientId)
 
 				if (patientHasUti) {
-					return res.status(409).send({ error: 'Patient already has an UTI assigned' })
+					return res.status(409).send({ error: 'Patient already has an UTI bed assigned' })
 				}
 			}
 
-			const uti = await this.utiRepository.create(data.data)
+			// Primeiro cria o leito para obter o ID
+			const uti = await this.utiRepository.create({
+				...data.data,
+				roomLink: null, // Será definido após criar a sala
+			})
 
-			// Registra a criação da UTI no log de auditoria
+			// Gera sala fixa do Daily.co para este leito
+			let finalUti = uti
+			try {
+				const roomName = `uti-bed-${uti.id}`
+				const room = await this.dailyService.createRoom(roomName, uti.id)
+				
+				// Atualiza o leito com o link da sala
+				finalUti = await this.utiRepository.update(uti.id, {
+					roomLink: room.url,
+				})
+			} catch (dailyError) {
+				console.error('Error creating Daily.co room for UTI bed:', dailyError)
+				// Continua sem a sala em caso de erro
+			}
+
+			// Registra a criação do leito no log de auditoria
 			if (req.user?.id && req.auditContext) {
 				if (data.data.patientId) {
 					// Se tem paciente, é uma admissão
 					await auditService.logUtiAdmission(
 						req.user.id,
 						data.data.patientId,
-						uti.id,
+						finalUti.id,
 						req.auditContext
 					)
 				}
 			}
 
 			return res.status(201).send({
-				message: 'UTI created successfully',
+				message: data.data.patientId ? 'UTI bed created with patient admission and video room' : 'UTI bed created successfully with video room',
+				data: finalUti,
+			})
+		} catch (error) {
+			console.error('Error creating UTI bed:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async getAll(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (req.user?.role !== 'master' && req.user?.role !== 'admin' && req.user?.role !== 'doctor') {
+				return res.status(403).send({ error: 'Insufficient permissions to view UTI beds' })
+			}
+
+			const utis = await this.utiRepository.findAll()
+
+			return res.status(200).send({
+				message: 'UTI beds retrieved successfully',
+				data: utis,
+			})
+		} catch (error) {
+			console.error('Error fetching UTI beds:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async getById(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (req.user?.role !== 'master' && req.user?.role !== 'admin' && req.user?.role !== 'doctor') {
+				return res.status(403).send({ error: 'Insufficient permissions to view UTI bed' })
+			}
+
+			const params = UtiIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'Invalid UTI ID', details: params.error })
+			}
+
+			const uti = await this.utiRepository.findById(params.data.id)
+
+			if (!uti) {
+				return res.status(404).send({ error: 'UTI bed not found' })
+			}
+
+			return res.status(200).send({
+				message: 'UTI bed retrieved successfully',
 				data: uti,
 			})
 		} catch (error) {
-			console.error('Error creating UTI:', error)
+			console.error('Error fetching UTI bed:', error)
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
 
 	async update(req: FastifyRequest, res: FastifyReply) {
 		try {
-			if (req.user !== 'master' && req.user?.role !== 'admin') {
-				return res.status(403).send({ error: 'Insufficient permissions to update UTI' })
+			if (req.user?.role !== 'master' && req.user?.role !== 'admin') {
+				return res.status(403).send({ error: 'Insufficient permissions to update UTI bed' })
 			}
 
 			const params = UtiIdSchema.safeParse(req.params)
@@ -82,9 +193,10 @@ export class UtiController {
 			const existingUti = await this.utiRepository.findById(params.data.id)
 
 			if (!existingUti) {
-				return res.status(404).send({ error: 'UTI not found' })
+				return res.status(404).send({ error: 'UTI bed not found' })
 			}
 
+			// Validação apenas se estiver atribuindo um paciente
 			if (data.data.patientId !== undefined && data.data.patientId !== null) {
 				const patientExists = await this.utiRepository.checkPatientExists(data.data.patientId)
 
@@ -92,11 +204,12 @@ export class UtiController {
 					return res.status(404).send({ error: 'Patient not found' })
 				}
 
+				// Verificar se o paciente já não está neste leito
 				if (data.data.patientId !== existingUti.patientId) {
 					const patientHasUti = await this.utiRepository.checkPatientHasUti(data.data.patientId)
 
 					if (patientHasUti) {
-						return res.status(409).send({ error: 'Patient already has an UTI assigned' })
+						return res.status(409).send({ error: 'Patient already has an UTI bed assigned' })
 					}
 				}
 			}
@@ -128,11 +241,70 @@ export class UtiController {
 			}
 
 			return res.status(200).send({
-				message: 'UTI updated successfully',
+				message: 'UTI bed updated successfully',
 				data: updatedUti,
 			})
 		} catch (error) {
-			console.error('Error updating UTI:', error)
+			console.error('Error updating UTI bed:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async getRoomToken(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (!req.user) {
+				return res.status(401).send({ error: 'Unauthorized' })
+			}
+
+			const params = UtiIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'Invalid UTI ID', details: params.error })
+			}
+
+			const uti = await this.utiRepository.findById(params.data.id)
+
+			if (!uti) {
+				return res.status(404).send({ error: 'UTI bed not found' })
+			}
+
+			if (!uti.roomLink) {
+				return res.status(404).send({ error: 'No video room associated with this UTI bed' })
+			}
+
+			// Extrai o nome da sala do URL
+			const roomName = `uti-bed-${uti.id}`
+
+			// Gera token de acesso
+			try {
+				// Mapeia 'master' para 'admin' pois Daily.co não reconhece 'master'
+				const dailyRole = req.user.role === 'master' ? 'admin' : req.user.role
+				
+				const token = await this.dailyService.generateToken(
+					roomName,
+					req.user.id,
+					dailyRole as 'admin' | 'doctor' | 'patient',
+					{
+						userName: req.user.email || 'Usuário',
+						expiresIn: 7200, // 2 horas
+					}
+				)
+
+				return res.status(200).send({
+					message: 'Access token generated successfully',
+					data: {
+						roomUrl: uti.roomLink,
+						token,
+						// URL completa com token para acesso direto
+						accessUrl: `${uti.roomLink}?t=${token}`,
+					},
+				})
+			} catch (tokenError) {
+				console.error('Error generating Daily.co token:', tokenError)
+				return res.status(500).send({ error: 'Failed to generate access token' })
+			}
+		} catch (error) {
+			console.error('Error getting room token:', error)
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}

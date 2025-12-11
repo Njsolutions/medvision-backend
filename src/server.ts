@@ -2,6 +2,7 @@ import fastifyJwt from '@fastify/jwt'
 import { fastify } from 'fastify'
 import { fastifySwagger } from '@fastify/swagger'
 import { fastifyCors } from '@fastify/cors'
+import fastifyMultipart from '@fastify/multipart'
 import ScalarApiReference from '@scalar/fastify-api-reference'
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
@@ -12,6 +13,8 @@ import { patientRoutes } from './routes/patient.routes'
 import { utiRoutes } from './routes/uti.routes'
 import { appointmentRoutes } from './routes/appointment.routes'
 import { auditLogRoutes } from './routes/auditlog.routes'
+import { triagemRoutes } from './routes/triagem.routes'
+import { patientFileRoutes } from './routes/patientfile.routes'
 import { auditContextDecorator } from './plugins/audit.plugin'
 import authPlugin from './plugins/auth.plugin'
 
@@ -27,6 +30,12 @@ server.setSerializerCompiler(serializerCompiler)
 server.register(fastifyCors, {
 	origin: ['http://localhost:5173', 'https://medvision-frontend.vercel.app', 'https://medvision.njsolutions.com.br'],
 	methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+})
+
+server.register(fastifyMultipart, {
+	limits: {
+		fileSize: 50 * 1024 * 1024, // 50MB
+	},
 })
 
 server.register(fastifyJwt, {
@@ -56,7 +65,6 @@ server.register(fastifySwagger, {
 
 server.register(ScalarApiReference, { routePrefix: `/v${version}/docs` })
 
-// Adiciona contexto de auditoria a todas as requisições
 server.addHook('onRequest', auditContextDecorator)
 
 server.register(authRoutes, { prefix: `/v${version}/auth` })
@@ -66,6 +74,8 @@ server.register(patientRoutes, { prefix: `/v${version}/patients` })
 server.register(utiRoutes, { prefix: `/v${version}/utis` })
 server.register(appointmentRoutes, { prefix: `/v${version}/appointments` })
 server.register(auditLogRoutes, { prefix: `/v${version}/audit-logs` })
+server.register(triagemRoutes, { prefix: `/v${version}/triagens` })
+server.register(patientFileRoutes, { prefix: `/v${version}/patient-files` })
 
 async function start() {
 	try {

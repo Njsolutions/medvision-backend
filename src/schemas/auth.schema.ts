@@ -14,12 +14,17 @@ export const SignInSchema = z.object({
 	password: z.string().min(6, 'Password must be at least 6 characters long'),
 })
 
+export const ValidateResetCodeSchema = z.object({
+	email: z.string().email('Invalid email address'),
+	resetCode: z.string().length(6, 'Reset code must be 6 characters long'),
+})
+
 export const RequestPasswordResetSchema = z.object({
 	email: z.string().email('Invalid email address'),
 })
 
 export const ResetPasswordSchema = z.object({
-	email: z.string().email('Invalid email address'),
+	resetToken: z.string().min(1, 'Reset token is required'),
 	newPassword: z.string().min(6, 'Password must be at least 6 characters long'),
 })
 
@@ -31,6 +36,6 @@ export const UpdateUserProfileSchema = z.object({
 
 export type RegisterUserInput = z.infer<typeof RegisterUserSchema>
 export type SignInInput = z.infer<typeof SignInSchema>
-export type RequestPasswordResetInput = z.infer<typeof RequestPasswordResetSchema>
+export type RequestPasswordResetInput = z.infer<typeof ValidateResetCodeSchema>
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>
 export type UpdateUserProfileInput = z.infer<typeof UpdateUserProfileSchema>
