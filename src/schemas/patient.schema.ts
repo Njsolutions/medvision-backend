@@ -4,8 +4,9 @@ export const CreatePatientSchema = z.object({
 	name: z.string().min(1, 'Name is required'),
 	cpf: z.string().length(11, 'CPF must be 11 characters long'),
 	phone: z.string().min(10, 'Phone number is required'),
-	email: z.string().email('Invalid email address'),
+	email: z.string().email('Invalid email address').optional(),
 	age: z.number().int().min(0, 'Age must be a positive number'),
+	birthDate: z.string().datetime('Invalid birth date format').optional(),
 	gender: z.enum(['male', 'female', 'other']),
 	address: z.any().optional(),
 })
@@ -15,6 +16,7 @@ export const UpdatePatientSchema = z.object({
 	phone: z.string().min(10, 'Phone number is required').optional(),
 	email: z.string().email('Invalid email address').optional(),
 	age: z.number().int().min(0, 'Age must be a positive number').optional(),
+	birthDate: z.string().datetime('Invalid birth date format').optional(),
 	gender: z.enum(['male', 'female', 'other']).optional(),
 	address: z.any().optional(),
 	active: z.boolean().optional(),

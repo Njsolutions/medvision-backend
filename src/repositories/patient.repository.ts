@@ -195,6 +195,7 @@ export class PatientRepository {
 		return db.patient.create({
 			data: {
 				age: data.age,
+				...(data.birthDate && { birthDate: new Date(data.birthDate) }),
 				gender: data.gender === 'other' ? 'male' : data.gender,
 				address: data.address,
 				user: {
@@ -227,12 +228,13 @@ export class PatientRepository {
 	}
 
 	async update(id: string, data: UpdatePatientInput) {
-		const { age, gender, address, active, ...userData } = data
+		const { age, birthDate, gender, address, active, ...userData } = data
 
 		return db.patient.update({
 			where: { id },
 			data: {
 				...(age !== undefined && { age }),
+				...(birthDate && { birthDate: new Date(birthDate) }),
 				...(gender && gender !== 'other' && { gender }),
 				...(address !== undefined && { address }),
 				user: {

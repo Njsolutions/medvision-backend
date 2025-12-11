@@ -86,9 +86,11 @@ model Patient {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  age     Int
-  gender  Genders
-  address Json?
+  age         Int
+  birthDate   DateTime?
+  gender      Genders
+  address     Json?
+  motherName  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -332,6 +334,8 @@ enum Roles {
 enum Genders {
   male // masculino
   female // feminino
+  indefinido // indefinido
+  ignorado // ignorado
 }
 
 enum StatusUti {

@@ -105,7 +105,15 @@ export class PatientController {
 				return res.status(409).send({ error: 'CPF already registered' })
 			}
 
-			const emailExists = await this.patientRepository.checkEmailExists(data.data.email)
+			// Gera email fictício se não for fornecido
+			let email = data.data.email
+			if (!email) {
+				const namePart = data.data.name.toLowerCase().replace(/\s+/g, '.')
+				const cpfPart = data.data.cpf.slice(-4)
+				email = `${namePart}.${cpfPart}@paciente.ficticio.com`
+			}
+
+			const emailExists = await this.patientRepository.checkEmailExists(email)
 
 			if (emailExists) {
 				return res.status(409).send({ error: 'Email already registered' })
@@ -116,6 +124,7 @@ export class PatientController {
 
 			const patient = await this.patientRepository.create({
 				...data.data,
+				email,
 				password: hashedPassword,
 			})
 
