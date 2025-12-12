@@ -217,6 +217,22 @@ export class AuditService {
     })
   }
 
+  async logAppointmentNoShow(
+    userId: string,
+    appointmentId: string,
+    context: AuditContext
+  ): Promise<void> {
+    await this.log({
+      userId,
+      action: 'APPOINTMENT_NO_SHOW',
+      description: 'Marcou paciente como ausente na consulta',
+      content: { appointmentId },
+      impactLevel: ImpactLevel.MEDIUM,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    })
+  }
+
   async logAppointmentPatientFeedback(
     userId: string,
     appointmentId: string,

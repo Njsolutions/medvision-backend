@@ -174,15 +174,22 @@ export class AppointmentController {
 				return res.status(400).send({ error: 'Invalid request data', details: data.error })
 			}
 
-			const existingAppointment = await this.appointmentRepository.findById(params.data.id)
+		const existingAppointment = await this.appointmentRepository.findById(params.data.id)
 
-			if (!existingAppointment) {
-				return res.status(404).send({ error: 'Appointment not found' })
-			}
+		if (!existingAppointment) {
+			return res.status(404).send({ error: 'Appointment not found' })
+		}
 
-			let newRoomName: string | undefined
+		// Validar se a consulta já foi finalizada (não pode mais ser editada)
+		const finalizedStatuses = ['cancelled', 'noShow', 'completed']
+		if (finalizedStatuses.includes(existingAppointment.status)) {
+			return res.status(400).send({ 
+				error: 'Cannot update a finalized appointment',
+				message: 'Consultas canceladas, concluídas ou com paciente ausente não podem ser editadas'
+			})
+		}
 
-			// Se a data da consulta mudou, criar nova sala
+		let newRoomName: string | undefined			// Se a data da consulta mudou, criar nova sala
 			if (data.data.appointmentDate) {
 				const newDate = new Date(data.data.appointmentDate)
 				const oldDate = new Date(existingAppointment.appointmentDate)
@@ -205,6 +212,19 @@ export class AppointmentController {
 					} catch (error) {
 						console.error('Error creating new Daily.co room:', error)
 						return res.status(500).send({ error: 'Failed to create new video room' })
+					}
+				}
+			}
+
+			// Verificar se a consulta está sendo finalizada (cancelada, noShow ou completed)
+			// Se sim, deletar a sala
+			if (data.data.status && ['cancelled', 'noShow', 'completed'].includes(data.data.status)) {
+				if (existingAppointment.roomName) {
+					try {
+						await this.dailyService.deleteRoom(existingAppointment.roomName)
+						console.log(`Room ${existingAppointment.roomName} deleted for appointment ${params.data.id}`)
+					} catch (error) {
+						console.error('Error deleting room on appointment finalization:', error)
 					}
 				}
 			}
@@ -246,7 +266,7 @@ export class AppointmentController {
 
 			// Registra a atualização da consulta no log de auditoria
 			if (req.user?.id && req.auditContext) {
-				// Verificar se foi cancelamento
+				// Verificar qual tipo de atualização foi feita
 				if (data.data.status === 'cancelled') {
 					await auditService.logAppointmentCancel(
 						req.user.id,
@@ -255,6 +275,12 @@ export class AppointmentController {
 					)
 				} else if (data.data.status === 'completed') {
 					await auditService.logAppointmentComplete(
+						req.user.id,
+						params.data.id,
+						req.auditContext
+					)
+				} else if (data.data.status === 'noShow') {
+					await auditService.logAppointmentNoShow(
 						req.user.id,
 						params.data.id,
 						req.auditContext
