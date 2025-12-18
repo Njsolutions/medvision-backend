@@ -102,7 +102,11 @@ export class PatientRepository {
 								},
 							},
 						},
-						prescriptions: true,
+						prescriptions: {
+							include: {
+								medicamentos: true,
+							},
+						},
 					},
 					orderBy: {
 						appointmentDate: 'desc',
@@ -128,6 +132,7 @@ export class PatientRepository {
 								reason: true,
 							},
 						},
+						medicamentos: true,
 					},
 					orderBy: {
 						createdAt: 'desc',

@@ -1,4 +1,5 @@
 import { AppointmentRepository } from '@/repositories/appointment.repository'
+import { DoctorRepository } from '@/repositories/doctor.repository'
 import { 
 	CreateAppointmentSchema, 
 	UpdateAppointmentSchema, 
@@ -10,14 +11,18 @@ import {
 import { createDailyService } from '@/services/daily.service'
 import { auditService } from '@/services/audit.service'
 import { storageService } from '@/services/storage.service'
+import { cronService } from '@/services/cron.service'
+import { validateDoctorAvailability, formatWeeklyAvailability } from '@/utils/functions/availability'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class AppointmentController {
 	private appointmentRepository: AppointmentRepository
+	private doctorRepository: DoctorRepository
 	private dailyService: ReturnType<typeof createDailyService>
 
 	constructor(_fastify: FastifyInstance) {
 		this.appointmentRepository = new AppointmentRepository()
+		this.doctorRepository = new DoctorRepository()
 		this.dailyService = createDailyService()
 	}
 
@@ -45,28 +50,59 @@ export class AppointmentController {
 	async create(req: FastifyRequest, res: FastifyReply) {
 		try {
 			if (req.user.role !== 'master' && req.user?.role !== 'admin' && req.user?.role !== 'doctor') {
-				return res.status(403).send({ error: 'Insufficient permissions to create appointment' })
+				return res.status(403).send({ 
+					error: 'Permissão negada',
+					message: 'Você não possui permissão para criar consultas'
+				})
 			}
 
 			const data = CreateAppointmentSchema.safeParse(req.body)
 
 			if (!data.success) {
-				return res.status(400).send({ error: 'Invalid request data', details: data.error })
-			}
+			const errorMessages = data.error.issues?.map((err: any) => err.message).join(', ') || 'Dados inválidos'
+			return res.status(400).send({ 
+				error: 'Dados inválidos', 
+				message: errorMessages,
+				details: data.error 
+			})
+		}
 
-			const patientExists = await this.appointmentRepository.checkPatientExists(data.data.patientId)
+		const patientExists = await this.appointmentRepository.checkPatientExists(data.data.patientId)
 
-			if (!patientExists) {
-				return res.status(404).send({ error: 'Patient not found' })
-			}
+	if (!patientExists) {
+		return res.status(404).send({ 
+			error: 'Paciente não encontrado',
+			message: 'O paciente especificado não existe no sistema'
+		})
+	}
 
-			const doctorExists = await this.appointmentRepository.checkDoctorExists(data.data.doctorId)
+	const doctorExists = await this.appointmentRepository.checkDoctorExists(data.data.doctorId)
 
-			if (!doctorExists) {
-				return res.status(404).send({ error: 'Doctor not found' })
-			}
+	if (!doctorExists) {
+		return res.status(404).send({ 
+			error: 'Médico não encontrado',
+			message: 'O médico especificado não existe no sistema'
+		})
+	}
 
-			const appointmentDate = new Date(data.data.appointmentDate)
+	// Validar disponibilidade do médico
+	const appointmentDate = new Date(data.data.appointmentDate)
+	const availabilityCheck = validateDoctorAvailability(
+		doctorExists.weeklyAvailability,
+		appointmentDate
+	)
+
+	if (!availabilityCheck.isAvailable) {
+		const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability)
+		return res.status(400).send({ 
+			error: 'Horário indisponível',
+			message: availabilityCheck.message,
+			doctorName: doctorExists.user.name,
+			doctorSchedule: schedule
+		})
+	}
+
+	// Verificar conflitos de horário
 			const conflict = await this.appointmentRepository.checkConflict(
 				data.data.patientId,
 				data.data.doctorId,
@@ -74,52 +110,76 @@ export class AppointmentController {
 			)
 
 			if (conflict) {
-				return res.status(409).send({ error: 'Appointment already exists for this date and time' })
-			}
+			const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability)
+			return res.status(409).send({ 
+				error: 'Conflito de horário',
+			message: 'Já existe uma consulta agendada para este médico ou paciente neste horário. Escolha outro horário disponível.',
+			doctorName: doctorExists.user.name,
+			doctorSchedule: schedule
+		})
+	}
 
-		// Criar sala no Daily.co
-		const roomName = `appointment-${Date.now()}-${data.data.patientId.slice(0, 8)}`
-		let dailyRoom: { roomName: string; url: string }
+	// Criar sala no Daily.co
+			const roomName = `appointment-${Date.now()}-${data.data.patientId.slice(0, 8)}`
+			let dailyRoom: { roomName: string; url: string }
 
-		try {
-			dailyRoom = await this.dailyService.createRoom(roomName, 'temp-id')
+			try {
+				dailyRoom = await this.dailyService.createRoom(roomName, 'temp-id')
 			} catch (error) {
 				console.error('Error creating Daily.co room:', error)
-				return res.status(500).send({ error: 'Failed to create video room' })
+				return res.status(500).send({ 
+					error: 'Erro ao criar sala de vídeo',
+					message: 'Não foi possível criar a sala de vídeo para a consulta'
+				})
 			}
 
 			const appointment = await this.appointmentRepository.create({
 				...data.data,
 				roomName: dailyRoom.roomName,
-			})
+			roomLink: dailyRoom.url,
+		})
 
-			// Gerar tokens de acesso para paciente e médico
-			let patientToken: string | undefined
-			let doctorToken: string | undefined
+		// Gerar tokens de acesso para paciente, médico e admin (se aplicável)
+		let patientToken: string | undefined
+		let doctorToken: string | undefined
+		let adminToken: string | undefined
 
-			try {
-				patientToken = await this.dailyService.generateToken(
+		try {
+			patientToken = await this.dailyService.generateToken(
+				dailyRoom.roomName,
+				data.data.patientId,
+				'patient',
+				{
+					userName: patientExists.user.name,
+					expiresIn: 86400, // 24 horas
+				},
+			)
+
+			doctorToken = await this.dailyService.generateToken(
+				dailyRoom.roomName,
+				data.data.doctorId,
+				'doctor',
+				{
+					userName: doctorExists.user.name,
+					expiresIn: 86400, // 24 horas
+				},
+			)
+
+			// Gerar token para admin/master que está criando a consulta
+			if (req.user?.role === 'admin' || req.user?.role === 'master') {
+				adminToken = await this.dailyService.generateToken(
 					dailyRoom.roomName,
-					data.data.patientId,
-					'patient',
+					req.user.id,
+					'admin',
 					{
-						userName: patientExists.user.name,
+						userName: req.user.name || 'Admin',
 						expiresIn: 86400, // 24 horas
 					},
 				)
-
-				doctorToken = await this.dailyService.generateToken(
-					dailyRoom.roomName,
-					data.data.doctorId,
-					'doctor',
-					{
-						userName: doctorExists.user.name,
-						expiresIn: 86400, // 24 horas
-					},
-				)
-			} catch (error) {
-				console.error('Error generating tokens:', error)
 			}
+		} catch (error) {
+			console.error('Error generating tokens:', error)
+		}
 
 			// Registra a criação da consulta no log de auditoria
 			if (req.user?.id && req.auditContext) {
@@ -142,17 +202,21 @@ export class AppointmentController {
 			}
 
 			return res.status(201).send({
-				message: 'Appointment created successfully',
+				message: 'Consulta criada com sucesso',
 				data: {
 					appointment: appointmentWithFiles,
 					roomUrl: dailyRoom.url,
 					patientToken,
 					doctorToken,
+					...(adminToken && { adminToken }),
 				},
 			})
 		} catch (error) {
 			console.error('Error creating appointment:', error)
-			return res.status(500).send({ error: 'Internal server error' })
+			return res.status(500).send({ 
+				error: 'Erro interno do servidor',
+				message: 'Ocorreu um erro ao criar a consulta. Tente novamente.'
+			})
 		}
 	}
 
@@ -165,71 +229,112 @@ export class AppointmentController {
 			const params = AppointmentIdSchema.safeParse(req.params)
 
 			if (!params.success) {
-				return res.status(400).send({ error: 'Invalid appointment ID', details: params.error })
+			const errorMessages = params.error.issues?.map((err: any) => err.message).join(', ') || 'ID de consulta inválido'
+		return res.status(400).send({ 
+			error: 'ID de consulta inválido',
+			message: errorMessages,
+			details: params.error 
+		})
+	}
+
+	const data = UpdateAppointmentSchema.safeParse(req.body)
+
+	if (!data.success) {
+		const errorMessages = data.error.errors?.map(err => err.message).join(', ') || 'Dados inválidos'
+		return res.status(400).send({ 
+			error: 'Dados inválidos',
+			message: errorMessages,
+			details: data.error 
+		})
+	}
+
+	const existingAppointment = await this.appointmentRepository.findById(params.data.id)
+
+if (!existingAppointment) {
+	return res.status(404).send({ 
+			message: 'A consulta especificada não existe no sistema'
+		})
+	}
+
+	// Validar se a consulta já foi finalizada (não pode mais ser editada)
+	const finalizedStatuses = ['cancelled', 'noShow', 'completed']
+	if (finalizedStatuses.includes(existingAppointment.status)) {
+		return res.status(400).send({ 
+			error: 'Consulta finalizada',
+			message: 'Consultas canceladas, concluídas ou com paciente ausente não podem ser editadas'
+		})
+	}
+
+	let newRoomName: string | undefined
+		// Se a data da consulta mudou, validar disponibilidade e criar nova sala
+		if (data.data.appointmentDate) {
+			const newDate = new Date(data.data.appointmentDate)
+			const oldDate = new Date(existingAppointment.appointmentDate)
+			
+			// Validar disponibilidade do médico na nova data
+			const doctorExists = await this.appointmentRepository.checkDoctorExists(existingAppointment.doctorId)
+			
+			if (!doctorExists) {
+				return res.status(404).send({ 
+					error: 'Médico não encontrado',
+					message: 'O médico associado à consulta não existe no sistema'
+				})
 			}
+			
+			const availabilityCheck = validateDoctorAvailability(
+				doctorExists.weeklyAvailability,
+				newDate
+			)
 
-			const data = UpdateAppointmentSchema.safeParse(req.body)
-
-			if (!data.success) {
-				return res.status(400).send({ error: 'Invalid request data', details: data.error })
-			}
-
-		const existingAppointment = await this.appointmentRepository.findById(params.data.id)
-
-		if (!existingAppointment) {
-			return res.status(404).send({ error: 'Appointment not found' })
-		}
-
-		// Validar se a consulta já foi finalizada (não pode mais ser editada)
-		const finalizedStatuses = ['cancelled', 'noShow', 'completed']
-		if (finalizedStatuses.includes(existingAppointment.status)) {
+			if (!availabilityCheck.isAvailable) {
+			const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability)
 			return res.status(400).send({ 
-				error: 'Cannot update a finalized appointment',
-				message: 'Consultas canceladas, concluídas ou com paciente ausente não podem ser editadas'
+				error: 'Horário indisponível',
+				message: availabilityCheck.message,
+				doctorName: doctorExists.user.name,
+				doctorSchedule: schedule
 			})
 		}
 
-		let newRoomName: string | undefined			// Se a data da consulta mudou, criar nova sala
-			if (data.data.appointmentDate) {
-				const newDate = new Date(data.data.appointmentDate)
-				const oldDate = new Date(existingAppointment.appointmentDate)
-
-				if (newDate.getTime() !== oldDate.getTime()) {
-					// Deletar sala antiga se existir
-					if (existingAppointment.roomName) {
-						try {
-							await this.dailyService.deleteRoom(existingAppointment.roomName)
-						} catch (error) {
-							console.error('Error deleting old room:', error)
-						}
-					}
-
-					// Criar nova sala
-					const roomName = `appointment-${Date.now()}-${existingAppointment.patientId.slice(0, 8)}`
-					try {
-						const dailyRoom = await this.dailyService.createRoom(roomName, params.data.id)
-						newRoomName = dailyRoom.roomName
-					} catch (error) {
-						console.error('Error creating new Daily.co room:', error)
-						return res.status(500).send({ error: 'Failed to create new video room' })
-					}
-				}
-			}
-
-			// Verificar se a consulta está sendo finalizada (cancelada, noShow ou completed)
-			// Se sim, deletar a sala
-			if (data.data.status && ['cancelled', 'noShow', 'completed'].includes(data.data.status)) {
-				if (existingAppointment.roomName) {
+		if (newDate.getTime() !== oldDate.getTime()) {
+			// Deletar sala antiga se existir
+			if (existingAppointment.roomName) {
 					try {
 						await this.dailyService.deleteRoom(existingAppointment.roomName)
-						console.log(`Room ${existingAppointment.roomName} deleted for appointment ${params.data.id}`)
 					} catch (error) {
-						console.error('Error deleting room on appointment finalization:', error)
+						console.error('Error deleting old room:', error)
 					}
 				}
-			}
 
-			const updatedAppointment = await this.appointmentRepository.update(params.data.id, {
+				// Criar nova sala
+				const roomName = `appointment-${Date.now()}-${existingAppointment.patientId.slice(0, 8)}`
+				try {
+					const dailyRoom = await this.dailyService.createRoom(roomName, params.data.id)
+					newRoomName = dailyRoom.roomName
+				} catch (error) {
+					console.error('Error creating new Daily.co room:', error)
+					return res.status(500).send({ 
+						error: 'Erro ao criar sala de vídeo',
+						message: 'Não foi possível criar uma nova sala de vídeo para a consulta'
+					})
+				}
+			}
+		}
+
+		// Verificar se a consulta está sendo finalizada (cancelada, noShow ou completed)
+		// Se sim, deletar a sala
+		if (data.data.status && ['cancelled', 'noShow', 'completed'].includes(data.data.status)) {
+			if (existingAppointment.roomName) {
+				try {
+					await this.dailyService.deleteRoom(existingAppointment.roomName)
+					console.log(`Room ${existingAppointment.roomName} deleted for appointment ${params.data.id}`)
+				} catch (error) {
+					console.error('Error deleting room on appointment finalization:', error)
+				}
+			}
+		}
+
+		const updatedAppointment = await this.appointmentRepository.update(params.data.id, {
 				...data.data,
 				...(newRoomName && { roomName: newRoomName }),
 			})
@@ -296,31 +401,39 @@ export class AppointmentController {
 			}
 
 			return res.status(200).send({
-				message: 'Appointment updated successfully',
-				data: {
-					appointment: updatedAppointment,
-					...(newRoomName && {
-						roomUrl: `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${newRoomName}`,
-						patientToken,
-						doctorToken,
-					}),
-				},
-			})
-		} catch (error) {
-			console.error('Error updating appointment:', error)
-			return res.status(500).send({ error: 'Internal server error' })
-		}
+			message: 'Consulta atualizada com sucesso',
+			data: {
+				appointment: updatedAppointment,
+				...(newRoomName && {
+					roomUrl: `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${newRoomName}`,
+					patientToken,
+					doctorToken,
+				}),
+			},
+		})
+	} catch (error) {
+		console.error('Error updating appointment:', error)
+		return res.status(500).send({ 
+			error: 'Erro interno do servidor',
+			message: 'Ocorreu um erro ao atualizar a consulta. Tente novamente.'
+		})
 	}
+}
 
-	async list(req: FastifyRequest, res: FastifyReply) {
-		try {
-			const query = ListAppointmentsSchema.safeParse(req.query)
+async list(req: FastifyRequest, res: FastifyReply) {
+	try {
+		const query = ListAppointmentsSchema.safeParse(req.query)
 
-			if (!query.success) {
-				return res.status(400).send({ error: 'Invalid query parameters', details: query.error })
-			}
+		if (!query.success) {
+			const errorMessages = query.error.issues?.map((err: any) => err.message).join(', ') || 'Parâmetros de consulta inválidos'
+			return res.status(400).send({ 
+				error: 'Parâmetros de consulta inválidos',
+				message: errorMessages,
+				details: query.error 
+			})
+		}
 
-			const filters: {
+		const filters: {
 				status?: 'scheduled' | 'inProgress' | 'completed' | 'cancelled' | 'noShow'
 				patientId?: string
 				doctorId?: string
@@ -341,7 +454,15 @@ export class AppointmentController {
 				filters.patientId = query.data.patientId
 			}
 
-			if (query.data.doctorId) {
+			// Se o usuário é médico, buscar automaticamente o doctorId pelo userId do token
+			const isDoctor = req.user?.role === 'doctor'
+			if (isDoctor) {
+				const doctor = await this.doctorRepository.findByUserId(req.user.id)
+				if (!doctor) {
+					return res.status(404).send({ error: 'Doctor profile not found' })
+				}
+				filters.doctorId = doctor.id
+			} else if (query.data.doctorId) {
 				filters.doctorId = query.data.doctorId
 			}
 
@@ -356,14 +477,77 @@ export class AppointmentController {
 			const result = await this.appointmentRepository.findAll(filters)
 
 			// Formatar arquivos com URLs para cada appointment
+			// Se for médico, remove os dados do próprio médico da resposta
 			const appointmentsWithFiles = await Promise.all(
-				result.appointments.map(async (appointment) => ({
-					...appointment,
-					patient: {
-						...appointment.patient,
-						files: appointment.patient.files ? await this.formatFiles(appointment.patient.files) : [],
-					},
-				}))
+				result.appointments.map(async (appointment) => {
+					const formattedAppointment = {
+						...appointment,
+						patient: {
+							...appointment.patient,
+							files: appointment.patient.files ? await this.formatFiles(appointment.patient.files) : [],
+						},
+					}
+
+					// Adicionar roomUrl e tokens se a consulta tiver roomName
+					let roomData = {}
+					if (appointment.roomName) {
+						const roomUrl = `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${appointment.roomName}`
+						
+						// Gerar tokens apenas para consultas agendadas ou em progresso
+						if (appointment.status === 'scheduled' || appointment.status === 'inProgress') {
+							try {
+								const patientToken = await this.dailyService.generateToken(
+									appointment.roomName,
+									appointment.patientId,
+									'patient',
+									{
+										userName: appointment.patient.user.name,
+										expiresIn: 86400,
+									}
+								)
+
+								const doctorToken = await this.dailyService.generateToken(
+									appointment.roomName,
+									appointment.doctorId,
+									'doctor',
+									{
+										userName: appointment.doctor.user.name,
+										expiresIn: 86400,
+									}
+								)
+
+								// Gerar token para admin/master
+								let adminToken: string | undefined
+								if (req.user?.role === 'admin' || req.user?.role === 'master') {
+									adminToken = await this.dailyService.generateToken(
+										appointment.roomName,
+										req.user.id,
+										'admin',
+										{
+											userName: req.user.name || 'Admin',
+											expiresIn: 86400,
+										}
+									)
+								}
+
+								roomData = { roomUrl, patientToken, doctorToken, ...(adminToken && { adminToken }) }
+							} catch (error) {
+								console.error('Error generating tokens for appointment:', appointment.id, error)
+								roomData = { roomUrl }
+							}
+						} else {
+							roomData = { roomUrl }
+						}
+					}
+
+					// Remove dados do médico se quem está buscando é o próprio médico
+					if (isDoctor) {
+						const { doctor: _doctor, ...appointmentWithoutDoctor } = formattedAppointment
+						return { ...appointmentWithoutDoctor, ...roomData }
+					}
+
+					return { ...formattedAppointment, ...roomData }
+				})
 			)
 
 			return res.status(200).send({
@@ -479,6 +663,109 @@ export class AppointmentController {
 			})
 		} catch (error) {
 			console.error('Error adding doctor feedback:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async cancelExpired(req: FastifyRequest, res: FastifyReply) {
+		try {
+			// Apenas master e admin podem executar manualmente
+			if (req.user?.role !== 'master' && req.user?.role !== 'admin') {
+				return res.status(403).send({ error: 'Insufficient permissions to cancel expired appointments' })
+			}
+
+			await cronService.runManually()
+
+			// Registra no log de auditoria
+			if (req.user?.id && req.auditContext) {
+				await auditService.logAction(
+					req.user.id,
+					'CANCEL_EXPIRED_APPOINTMENTS',
+					'Appointment',
+					'manual-execution',
+					null,
+					req.auditContext
+				)
+			}
+
+			return res.status(200).send({
+				message: 'Expired appointments cancellation executed successfully',
+			})
+		} catch (error) {
+			console.error('Error canceling expired appointments:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async getRoomToken(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (!req.user) {
+				return res.status(401).send({ error: 'Unauthorized' })
+			}
+
+			const params = AppointmentIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'Invalid appointment ID', details: params.error })
+			}
+
+			const appointment = await this.appointmentRepository.findById(params.data.id)
+
+			if (!appointment) {
+				return res.status(404).send({ error: 'Appointment not found' })
+			}
+
+			if (!appointment.roomLink) {
+				return res.status(404).send({ error: 'No video room associated with this appointment' })
+			}
+
+		// Usa o roomName salvo no banco de dados
+		if (!appointment.roomName) {
+			return res.status(404).send({ error: 'No room name associated with this appointment' })
+		}
+
+		// Gera token de acesso
+		try {
+			// Mapeia 'master' para 'admin' pois Daily.co não reconhece 'master'
+			const dailyRole = req.user.role === 'master' ? 'admin' : req.user.role
+			
+			const token = await this.dailyService.generateToken(
+				appointment.roomName,
+				req.user.id,
+				dailyRole as 'admin' | 'doctor' | 'patient',
+				{
+					userName: req.user.email || 'Usuário',
+					expiresIn: 7200, // 2 horas
+				}
+			)
+
+			// Monta a resposta com o token nomeado pelo role
+			const responseData: any = {
+				roomUrl: appointment.roomLink,
+				accessUrl: `${appointment.roomLink}?t=${token}`,
+			}
+
+			// Adiciona o token com o nome correto baseado no role
+			if (req.user.role === 'doctor') {
+				responseData.doctorToken = token
+			} else if (req.user.role === 'patient') {
+				responseData.patientToken = token
+			} else if (req.user.role === 'admin' || req.user.role === 'master') {
+				responseData.adminToken = token
+			} else {
+				responseData.token = token // fallback
+			}
+
+			return res.status(200).send({
+				message: 'Access token generated successfully',
+				data: responseData,
+			})
+		} catch (tokenError) {
+			console.error('Error generating Daily.co token:', tokenError)
+			return res.status(500).send({ error: 'Failed to generate access token' })
+		}
+		} catch (error) {
+			console.error('Error getting room token:', error)
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}

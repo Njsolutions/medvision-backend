@@ -42,6 +42,69 @@ export class DoctorRepository {
 						updatedAt: true,
 					},
 				},
+				requests: {
+					include: {
+						patient: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										cpf: true,
+										phone: true,
+										email: true,
+									},
+								},
+							},
+						},
+						appointment: true,
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
+				prescriptions: {
+					include: {
+						patient: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										cpf: true,
+										phone: true,
+										email: true,
+									},
+								},
+							},
+						},
+						appointment: true,
+						medicamentos: true,
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
+				anamises: {
+					include: {
+						patient: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										cpf: true,
+										phone: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
 			},
 		})
 	}
@@ -137,6 +200,12 @@ export class DoctorRepository {
 	async checkCrmExists(crm: string) {
 		return db.doctor.findUnique({
 			where: { crm },
+		})
+	}
+
+	async findByUserId(userId: string) {
+		return db.doctor.findUnique({
+			where: { userId },
 		})
 	}
 }

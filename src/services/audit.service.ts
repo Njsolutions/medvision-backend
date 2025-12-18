@@ -268,20 +268,57 @@ export class AuditService {
   /**
    * Logs de prescrições
    */
-  async logPrescriptionCreate(
-    doctorId: string,
+  async logPrescriptionCreated(
+    userId: string,
     prescriptionId: string,
-    patientId: string,
-    context: AuditContext
+    content: Record<string, unknown>,
+    ipAddress?: string,
+    userAgent?: string
   ): Promise<void> {
     await this.log({
-      userId: doctorId,
+      userId,
       action: 'PRESCRIPTION_CREATE',
       description: 'Criou prescrição médica',
-      content: { prescriptionId, patientId },
+      content: { prescriptionId, ...content },
       impactLevel: ImpactLevel.HIGH,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
+      ipAddress,
+      userAgent,
+    })
+  }
+
+  async logPrescriptionUpdated(
+    userId: string,
+    prescriptionId: string,
+    changes: Record<string, unknown>,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<void> {
+    await this.log({
+      userId,
+      action: 'PRESCRIPTION_UPDATE',
+      description: 'Atualizou prescrição médica',
+      content: { prescriptionId, changes },
+      impactLevel: ImpactLevel.HIGH,
+      ipAddress,
+      userAgent,
+    })
+  }
+
+  async logPrescriptionDeleted(
+    userId: string,
+    prescriptionId: string,
+    content: Record<string, unknown>,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<void> {
+    await this.log({
+      userId,
+      action: 'PRESCRIPTION_DELETE',
+      description: 'Removeu prescrição médica',
+      content: { prescriptionId, ...content },
+      impactLevel: ImpactLevel.CRITICAL,
+      ipAddress,
+      userAgent,
     })
   }
 

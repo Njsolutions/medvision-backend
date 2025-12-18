@@ -202,6 +202,7 @@ model Appointment {
   status          AppointmentStatus @default(scheduled)
   notes           String?
   roomName        String?
+  roomLink        String?
   durationMinutes Int?
   feedbackPatient String?
   feedbackDoctor  String?
@@ -212,6 +213,7 @@ model Appointment {
   patient         Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
   prescriptions   Prescription[]
   triagens        Triagem[]
+  requests        Request[]
 
   @@unique([patientId, doctorId, appointmentDate])
   @@index([doctorId])
@@ -220,20 +222,40 @@ model Appointment {
 }
 
 model Prescription {
-  id            String       @id @default(uuid())
-  patientId     String
-  doctorId      String
-  appointmentId String?
-  content       String
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-  doctor        Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  patient       Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  id                 String              @id @default(uuid())
+  patientId          String
+  doctorId           String
+  appointmentId      String?
+  orientacoesGerais  String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  appointment        Appointment?        @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  doctor             Doctor              @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient            Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  medicamentos       Medicamento[]
 
   @@index([doctorId])
   @@index([patientId])
   @@map("prescriptions")
+}
+
+model Medicamento {
+  id             String       @id @default(uuid())
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  
+  nome          String
+  dosagem       String
+  frequencia    String
+  duracao       String
+  via           String
+  orientacoes   String?
+  
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([prescriptionId])
+  @@map("medicamentos")
 }
 
 model Request {
@@ -243,15 +265,18 @@ model Request {
   status  RequestStatus @default(pending)
   details Json?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  patient   Patient? @relation(fields: [patientId], references: [id])
-  patientId String?
-  doctor    Doctor?  @relation(fields: [doctorId], references: [id])
-  doctorId  String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  patient       Patient?     @relation(fields: [patientId], references: [id])
+  patientId     String?
+  doctor        Doctor?      @relation(fields: [doctorId], references: [id])
+  doctorId      String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+  appointmentId String?
 
   @@index([patientId])
   @@index([doctorId])
+  @@index([appointmentId])
   @@index([status])
   @@map("requests")
 }

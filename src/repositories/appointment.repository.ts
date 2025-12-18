@@ -67,11 +67,59 @@ export class AppointmentRepository {
 						},
 					},
 				},
+				prescriptions: {
+					include: {
+						medicamentos: true,
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
+				requests: {
+					include: {
+						patient: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
 			},
 		})
 	}
 
-	async create(data: CreateAppointmentInput & { roomName: string }) {
+	async create(data: CreateAppointmentInput & { roomName: string; roomLink?: string }) {
 		return db.appointment.create({
 			data: {
 				patientId: data.patientId,
@@ -81,6 +129,7 @@ export class AppointmentRepository {
 				durationMinutes: data.durationMinutes,
 				notes: data.notes,
 				roomName: data.roomName,
+				roomLink: data.roomLink,
 				status: 'scheduled',
 			},
 			include: {
@@ -143,6 +192,35 @@ export class AppointmentRepository {
 								role: true,
 							},
 						},
+					},
+				},
+				requests: {
+					include: {
+						patient: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
 					},
 				},
 			},
@@ -222,6 +300,35 @@ export class AppointmentRepository {
 								role: true,
 							},
 						},
+					},
+				},
+				requests: {
+					include: {
+						patient: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
 					},
 				},
 			},
@@ -382,6 +489,54 @@ export class AppointmentRepository {
 									role: true,
 								},
 							},
+						},
+					},
+					prescriptions: {
+						include: {
+							medicamentos: true,
+							doctor: {
+								include: {
+									user: {
+										select: {
+											id: true,
+											name: true,
+											email: true,
+										},
+									},
+								},
+							},
+						},
+						orderBy: {
+							createdAt: 'desc',
+						},
+					},
+					requests: {
+						include: {
+							patient: {
+								include: {
+									user: {
+										select: {
+											id: true,
+											name: true,
+											email: true,
+										},
+									},
+								},
+							},
+							doctor: {
+								include: {
+									user: {
+										select: {
+											id: true,
+											name: true,
+											email: true,
+										},
+									},
+								},
+							},
+						},
+						orderBy: {
+							createdAt: 'desc',
 						},
 					},
 				},

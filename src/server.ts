@@ -15,8 +15,11 @@ import { appointmentRoutes } from './routes/appointment.routes'
 import { auditLogRoutes } from './routes/auditlog.routes'
 import { triagemRoutes } from './routes/triagem.routes'
 import { patientFileRoutes } from './routes/patientfile.routes'
+import { requestRoutes } from './routes/request.routes'
+import { prescriptionRoutes } from './routes/prescription.routes'
 import { auditContextDecorator } from './plugins/audit.plugin'
 import authPlugin from './plugins/auth.plugin'
+import { cronService } from './services/cron.service'
 
 const version = process.env.API_VERSION || '1'
 
@@ -76,6 +79,8 @@ server.register(appointmentRoutes, { prefix: `/v${version}/appointments` })
 server.register(auditLogRoutes, { prefix: `/v${version}/audit-logs` })
 server.register(triagemRoutes, { prefix: `/v${version}/triagens` })
 server.register(patientFileRoutes, { prefix: `/v${version}/patient-files` })
+server.register(requestRoutes, { prefix: `/v${version}/requests` })
+server.register(prescriptionRoutes, { prefix: `/v${version}/prescriptions` })
 
 async function start() {
 	try {
@@ -83,6 +88,9 @@ async function start() {
 		await server.listen({ port: Number(process.env.PORT) || 3333, host: '0.0.0.0' })
 		console.log(`Server listening at http://localhost:${Number(process.env.PORT) || 3333}`)
 		console.log(`Docs listening at http://localhost:${Number(process.env.PORT) || 3333}/v${version}/docs`)
+		
+		// Inicializa o cron job de cancelamento de consultas expiradas
+		cronService.startExpiredAppointmentsCheck()
 	} catch (err) {
 		console.error('Error starting server:', err)
 		server.log.error(err)
