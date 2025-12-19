@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const CreatePatientSchema = z.object({
 	name: z.string().min(1, 'Nome é obrigatório'),
 	cpf: z.string().length(11, 'CPF deve ter 11 dígitos'),
-	phone: z.string().min(10, 'Telefone é obrigatório'),
+	phone: z.string().min(10, 'Telefone deve ter no mínimo 10 dígitos').max(11, 'Telefone deve ter no máximo 11 dígitos'),
 	email: z.string().email('Email inválido').optional().or(z.literal('')),
 	motherName: z.string().optional(),
 	age: z.number().int().min(0, 'Idade deve ser um número positivo'),
@@ -16,7 +16,7 @@ export const CreatePatientSchema = z.object({
 
 export const UpdatePatientSchema = z.object({
 	name: z.string().min(1, 'Nome é obrigatório').optional(),
-	phone: z.string().min(10, 'Telefone é obrigatório').optional(),
+	phone: z.string().min(10, 'Telefone deve ter no mínimo 10 dígitos').max(11, 'Telefone deve ter no máximo 11 dígitos').optional(),
 	email: z.string().email('Email inválido').optional().or(z.literal('')),
 	motherName: z.string().optional(),
 	age: z.number().int().min(0, 'Idade deve ser um número positivo').optional(),
