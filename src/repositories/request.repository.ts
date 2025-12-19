@@ -65,9 +65,22 @@ export class RequestRepository {
 	async findById(id: string) {
 		return db.request.findUnique({
 			where: { id },
-			include: {
+			select: {
+				id: true,
+				patientId: true,
+				doctorId: true,
+				appointmentId: true,
+				type: true,
+				status: true,
+				details: true,
+				createdAt: true,
+				updatedAt: true,
 				patient: {
-					include: {
+					select: {
+						id: true,
+						age: true,
+						gender: true,
+						birthDate: true,
 						user: {
 							select: {
 								id: true,
@@ -80,7 +93,10 @@ export class RequestRepository {
 					},
 				},
 				doctor: {
-					include: {
+					select: {
+						id: true,
+						crm: true,
+						specialty: true,
 						user: {
 							select: {
 								id: true,

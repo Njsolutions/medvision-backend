@@ -1,6 +1,5 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -453,4 +452,41 @@ enum FileCategory {
   DOCUMENT // Documentos gerais
   REPORT // Laudos
   CONSENT_FORM // Termos de consentimento
+}
+
+model Signature {
+  id            String   @id @default(uuid())
+  certificateId String   @unique
+  
+  // Documento
+  documentType  String   // "anamnese", "prescription", "exam", "report"
+  documentId    String   // ID da anamnese, prescrição, etc
+  documentHash  String   // Hash SHA-256 do conteúdo
+  
+  // Assinante
+  signerId      String
+  signerName    String
+  signerCRM     String?
+  signerRole    String   // "doctor", "admin"
+  
+  // Assinatura
+  signature     String   @db.Text
+  
+  // Metadados
+  ipAddress     String?
+  userAgent     String?
+  signedAt      DateTime
+  
+  // Verificação
+  verified      Boolean  @default(false)
+  verifiedAt    DateTime?
+  verifiedBy    String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([documentType, documentId])
+  @@index([signerId])
+  @@index([certificateId])
+  @@map("signatures")
 }

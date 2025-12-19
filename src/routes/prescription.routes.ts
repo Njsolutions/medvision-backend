@@ -26,4 +26,14 @@ export async function prescriptionRoutes(app: FastifyInstance) {
 	app.delete('/:id', { preHandler: [app.authenticate] }, async (req, res) => 
 		prescriptionController.delete(req, res)
 	)
+
+	// GET /prescriptions/:id/pdf - Gera PDF da prescrição
+	app.get('/:id/pdf', { preHandler: [app.authenticate] }, async (req, res) => 
+		prescriptionController.generatePDF(req, res)
+	)
+
+	// PUT /prescriptions/:id/sign - Assina prescrição existente
+	app.put('/:id/sign', { preHandler: [app.authenticate] }, async (req, res) => 
+		prescriptionController.signPrescription(req, res)
+	)
 }

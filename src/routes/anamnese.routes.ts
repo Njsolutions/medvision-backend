@@ -31,4 +31,19 @@ export function anamneseRoutes(app: FastifyInstance) {
 	app.delete('/:id', { preHandler: [app.authenticate] }, async (req, res) =>
 		controller.delete(req, res)
 	);
+
+	// Gerar PDF da anamnese
+	app.get('/:id/pdf', { preHandler: [app.authenticate] }, async (req, res) =>
+		controller.generatePDF(req, res)
+	);
+
+	// Assinar anamnese existente (retroativo)
+	app.put('/:id/sign', { preHandler: [app.authenticate] }, async (req, res) =>
+		controller.signExisting(req, res)
+	);
+
+	// Verificar integridade e assinatura
+	app.get('/:id/verify', { preHandler: [app.authenticate] }, async (req, res) =>
+		controller.verifyIntegrity(req, res)
+	);
 }

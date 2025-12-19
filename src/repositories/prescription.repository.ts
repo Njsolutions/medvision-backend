@@ -128,32 +128,56 @@ export class PrescriptionRepository {
 	async findById(id: string) {
 		return await db.prescription.findUnique({
 			where: { id },
-			include: {
+			select: {
+				id: true,
+				patientId: true,
+				doctorId: true,
+				appointmentId: true,
+				orientacoesGerais: true,
+				createdAt: true,
+				updatedAt: true,
 				medicamentos: {
 					orderBy: {
 						createdAt: 'asc',
 					},
+					select: {
+						id: true,
+						nome: true,
+						dosagem: true,
+						frequencia: true,
+						duracao: true,
+						via: true,
+						orientacoes: true,
+						createdAt: true,
+					},
 				},
 				patient: {
-					include: {
+					select: {
+						id: true,
+						age: true,
+						gender: true,
+						birthDate: true,
 						user: {
 							select: {
 								id: true,
 								name: true,
 								email: true,
 								cpf: true,
+								phone: true,
 							},
 						},
 					},
 				},
 				doctor: {
-					include: {
+					select: {
+						id: true,
+						crm: true,
+						specialty: true,
 						user: {
 							select: {
 								id: true,
 								name: true,
 								email: true,
-								cpf: true,
 							},
 						},
 					},

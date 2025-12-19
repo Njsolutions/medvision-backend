@@ -57,16 +57,62 @@ export class RequestController {
 			// Cria as solicitações
 			const requests = await this.requestRepository.createMany(data)
 
+			// ✅ GERA ASSINATURA ELETRÔNICA AUTOMÁTICA para cada solicitação
+			const { signatureService } = await import('../services/signature.service')
+			const { signatureRepository } = await import('../repositories/signature.repository')
+
+			const signaturesData = []
+
+			for (const request of requests) {
+				const documentContent = {
+					id: request.id,
+					patientId: request.patientId,
+					doctorId: request.doctorId,
+					type: request.type,
+					details: request.details,
+					createdAt: request.createdAt,
+				}
+
+				const documentHash = signatureService.generateDocumentHash(JSON.stringify(documentContent))
+				const certificateId = `CERT-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+
+				const signatureData = {
+					documentType: 'request' as const,
+					documentId: request.id,
+					documentHash,
+					certificateId,
+					signerId: doctor.id,
+					signerName: doctor.user.name,
+					signerCRM: doctor.crm,
+					ipAddress: req.ip,
+					userAgent: req.headers['user-agent'] || 'Unknown',
+				}
+
+				const signature = signatureService.signDocument(signatureData)
+
+				await signatureRepository.create({
+					...signatureData,
+					signature,
+				})
+
+				signaturesData.push({
+					requestId: request.id,
+					certificateId,
+					signedAt: new Date(),
+				})
+			}
+
 			// Registra auditoria
 			await auditService.log({
 				userId,
 				action: 'CREATE_REQUESTS',
-				description: `Criou ${requests.length} solicitação(ões) para o paciente ${patient.user.name}`,
+				description: `Criou e assinou ${requests.length} solicitação(ões) para o paciente ${patient.user.name}`,
 				content: {
 					requestIds: requests.map((r) => r.id),
 					patientId: data.patientId,
 					doctorId: data.doctorId,
 					count: requests.length,
+					certificates: signaturesData,
 				},
 				impactLevel: 'medium',
 				ipAddress: req.ip,
@@ -75,8 +121,9 @@ export class RequestController {
 
 			return res.status(201).send({
 				success: true,
-				message: `${requests.length} solicitação(ões) criada(s) com sucesso`,
+				message: `${requests.length} solicitação(ões) criada(s) e assinada(s) com sucesso`,
 				data: requests,
+				signatures: signaturesData,
 			})
 		} catch (error: any) {
 			if (error.name === 'ZodError') {
@@ -335,6 +382,205 @@ export class RequestController {
 				success: false,
 				message: 'Erro ao buscar solicitações do médico',
 				error: error.message,
+			})
+		}
+	}
+
+	/**
+	 * Gera PDF da solicitação
+	 */
+	async generatePDF(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const { id } = RequestIdSchema.parse(req.params)
+
+			// Busca solicitação completa
+			const request = await this.requestRepository.findById(id)
+
+			if (!request) {
+				return res.status(404).send({
+					success: false,
+					message: 'Solicitação não encontrada',
+				})
+			}
+
+			// Verifica permissão
+			const userId = req.user?.id
+			const isDoctor = request.doctorId === req.user?.doctorId
+			const isPatient = request.patientId === req.user?.patientId
+			const isAdmin = req.user?.role === 'admin' || req.user?.role === 'master'
+
+			if (!isDoctor && !isPatient && !isAdmin) {
+				return res.status(403).send({
+					success: false,
+					message: 'Você não tem permissão para acessar esta solicitação',
+				})
+			}
+
+			// Busca assinatura
+			const { signatureRepository } = await import('../repositories/signature.repository')
+			const signatures = await signatureRepository.findByDocument('request', id)
+			const signature = signatures.length > 0 ? signatures[0] : undefined
+
+			console.log(`🔍 Assinaturas encontradas: ${signatures.length}`)
+			if (signature) {
+				console.log('✅ Assinatura será incluída no PDF')
+			} else {
+				console.log('⚠️ Nenhuma assinatura encontrada para esta solicitação - PDF será gerado sem assinatura')
+			}
+
+			// Gera PDF
+			const { pdfGeneratorService } = await import('../services/pdf-generator.service')
+			const base64PDF = await pdfGeneratorService.generateRequestPDF(
+				request,
+				signature ? {
+					certificateId: signature.certificateId,
+					signedBy: signature.signerName,
+					signedAt: signature.signedAt,
+					documentHash: signature.documentHash,
+				} : undefined
+			)
+
+			console.log(`✅ PDF gerado com sucesso, tamanho: ${Buffer.from(base64PDF, 'base64').length}`)
+
+			// Registra acesso no audit log
+			try {
+				await auditService.log({
+					userId: userId!,
+					action: 'GENERATE_REQUEST_PDF',
+					description: `PDF gerado para solicitação ${id}`,
+					content: { requestId: id },
+					impactLevel: 'low',
+					ipAddress: req.ip,
+					userAgent: req.headers['user-agent'],
+				})
+			} catch (auditError) {
+				console.error('⚠️ Erro ao registrar audit log:', auditError)
+			}
+
+			return res.status(200).send({
+				success: true,
+				message: 'PDF gerado com sucesso',
+				data: {
+					pdf: base64PDF,
+					filename: `solicitacao-${request.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
+					mimeType: 'application/pdf',
+					size: Buffer.from(base64PDF, 'base64').length,
+				},
+			})
+		} catch (error: any) {
+			console.error('❌ Error generating PDF:', error)
+			console.error('Error message:', error?.message)
+			console.error('Error stack:', error?.stack)
+
+			return res.status(500).send({
+				success: false,
+				message: 'Erro ao gerar PDF',
+				details: error?.message || 'Erro desconhecido',
+			})
+		}
+	}
+
+	/**
+	 * Assina uma solicitação existente
+	 */
+	async signRequest(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const { id } = RequestIdSchema.parse(req.params)
+			const userId = req.user?.id
+
+			if (!userId) {
+				return res.status(401).send({
+					success: false,
+					message: 'Usuário não autenticado',
+				})
+			}
+
+			// Busca solicitação
+			const request = await this.requestRepository.findById(id)
+
+			if (!request) {
+				return res.status(404).send({
+					success: false,
+					message: 'Solicitação não encontrada',
+				})
+			}
+
+			// Verifica se é o médico da solicitação
+			if (request.doctorId !== req.user?.doctorId) {
+				return res.status(403).send({
+					success: false,
+					message: 'Apenas o médico responsável pode assinar a solicitação',
+				})
+			}
+
+			const { signatureService } = await import('../services/signature.service')
+			const { signatureRepository } = await import('../repositories/signature.repository')
+
+			// Verifica se já tem assinatura
+			const existingSignatures = await signatureRepository.findByDocument('request', id)
+			if (existingSignatures.length > 0) {
+				return res.status(400).send({
+					success: false,
+					message: 'Solicitação já está assinada',
+				})
+			}
+
+			// Gera assinatura
+			const documentContent = {
+				id: request.id,
+				patientId: request.patientId,
+				doctorId: request.doctorId,
+				type: request.type,
+				details: request.details,
+				createdAt: request.createdAt,
+			}
+
+			const documentHash = signatureService.generateDocumentHash(JSON.stringify(documentContent))
+			const certificateId = `CERT-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+
+			const signatureData = {
+				documentType: 'request' as const,
+				documentId: request.id,
+				documentHash,
+				certificateId,
+				signerId: request.doctorId,
+				signerName: request.doctor.user.name,
+				signerCRM: request.doctor.crm,
+				ipAddress: req.ip,
+				userAgent: req.headers['user-agent'] || 'Unknown',
+			}
+
+			const signature = signatureService.signDocument(signatureData)
+
+			await signatureRepository.create({
+				...signatureData,
+				signature,
+			})
+
+			const certificate = signatureService.generateCertificate({
+				certificateId,
+				signedBy: signatureData.signerName,
+				signedAt: new Date(),
+				documentHash: signatureData.documentHash,
+			})
+
+			return res.status(201).send({
+				success: true,
+				message: 'Solicitação assinada com sucesso',
+				data: {
+					certificateId,
+					signedAt: new Date(),
+					signedBy: signatureData.signerName,
+					documentHash: signature.documentHash,
+					certificate,
+				},
+			})
+		} catch (error: any) {
+			console.error('Error signing request:', error)
+			return res.status(500).send({
+				success: false,
+				message: 'Erro ao assinar solicitação',
+				error: error?.message,
 			})
 		}
 	}

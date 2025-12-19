@@ -37,4 +37,14 @@ export function requestRoutes(app: FastifyInstance) {
 	app.delete('/:id', { preHandler: [app.authenticate] }, async (req, res) => 
 		controller.delete(req, res)
 	)
+
+	// GET /requests/:id/pdf - Gera PDF da solicitação
+	app.get('/:id/pdf', { preHandler: [app.authenticate] }, async (req, res) => 
+		controller.generatePDF(req, res)
+	)
+	
+	// PUT /requests/:id/sign - Assina solicitação existente
+	app.put('/:id/sign', { preHandler: [app.authenticate] }, async (req, res) => 
+		controller.signRequest(req, res)
+	)
 }

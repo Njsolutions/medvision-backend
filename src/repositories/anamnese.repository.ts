@@ -7,7 +7,11 @@ export class AnamneseRepository {
 			data,
 			include: {
 				patient: {
-					include: {
+					select: {
+						id: true,
+						age: true,
+						birthDate: true,
+						gender: true,
 						user: {
 							select: {
 								id: true,
@@ -20,7 +24,10 @@ export class AnamneseRepository {
 					},
 				},
 				doctor: {
-					include: {
+					select: {
+						id: true,
+						crm: true,
+						specialty: true,
 						user: {
 							select: {
 								id: true,
@@ -49,7 +56,11 @@ export class AnamneseRepository {
 			where: { id },
 			include: {
 				patient: {
-					include: {
+					select: {
+						id: true,
+						age: true,
+						birthDate: true,
+						gender: true,
 						user: {
 							select: {
 								id: true,
@@ -62,7 +73,10 @@ export class AnamneseRepository {
 					},
 				},
 				doctor: {
-					include: {
+					select: {
+						id: true,
+						crm: true,
+						specialty: true,
 						user: {
 							select: {
 								id: true,
@@ -91,7 +105,10 @@ export class AnamneseRepository {
 			where: { patientId },
 			include: {
 				doctor: {
-					include: {
+					select: {
+						id: true,
+						crm: true,
+						specialty: true,
 						user: {
 							select: {
 								id: true,
@@ -123,7 +140,27 @@ export class AnamneseRepository {
 			where: { doctorId },
 			include: {
 				patient: {
-					include: {
+					select: {
+						id: true,
+						age: true,
+						birthDate: true,
+						gender: true,
+						user: {
+							select: {
+								id: true,
+								name: true,
+								cpf: true,
+								email: true,
+								phone: true,
+							},
+						},
+					},
+				},
+				doctor: {
+					select: {
+						id: true,
+						crm: true,
+						specialty: true,
 						user: {
 							select: {
 								id: true,
@@ -154,7 +191,11 @@ export class AnamneseRepository {
 		return db.anaminese.findMany({
 			include: {
 				patient: {
-					include: {
+					select: {
+						id: true,
+						age: true,
+						birthDate: true,
+						gender: true,
 						user: {
 							select: {
 								id: true,
@@ -167,7 +208,10 @@ export class AnamneseRepository {
 					},
 				},
 				doctor: {
-					include: {
+					select: {
+						id: true,
+						crm: true,
+						specialty: true,
 						user: {
 							select: {
 								id: true,
@@ -200,7 +244,11 @@ export class AnamneseRepository {
 			data,
 			include: {
 				patient: {
-					include: {
+					select: {
+						id: true,
+						age: true,
+						birthDate: true,
+						gender: true,
 						user: {
 							select: {
 								id: true,
@@ -213,7 +261,10 @@ export class AnamneseRepository {
 					},
 				},
 				doctor: {
-					include: {
+					select: {
+						id: true,
+						crm: true,
+						specialty: true,
 						user: {
 							select: {
 								id: true,
