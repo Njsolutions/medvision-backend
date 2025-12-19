@@ -31,9 +31,10 @@ export class UtiController {
 				const roomName = `uti-bed-${uti.id}`
 				const room = await this.dailyService.createRoom(roomName, uti.id)
 				
-				// Atualiza o leito com o link da sala
+				// Atualiza o leito com o link da sala e o roomName
 				const updatedUti = await this.utiRepository.update(uti.id, {
 					roomLink: room.url,
+					roomName: roomName,
 				})
 
 				return res.status(201).send({
@@ -94,9 +95,10 @@ export class UtiController {
 				const roomName = `uti-bed-${uti.id}`
 				const room = await this.dailyService.createRoom(roomName, uti.id)
 				
-				// Atualiza o leito com o link da sala
+				// Atualiza o leito com o link da sala e o roomName
 				finalUti = await this.utiRepository.update(uti.id, {
 					roomLink: room.url,
+					roomName: roomName,
 				})
 			} catch (dailyError) {
 				console.error('Error creating Daily.co room for UTI bed:', dailyError)
@@ -272,16 +274,27 @@ export class UtiController {
 				return res.status(404).send({ error: 'No video room associated with this UTI bed' })
 			}
 
-			// Extrai o nome da sala do URL
-			const roomName = `uti-bed-${uti.id}`
+			if (!uti.roomName) {
+				return res.status(404).send({ error: 'No room name associated with this UTI bed' })
+			}
 
 			// Gera token de acesso
 			try {
 				// Mapeia 'master' para 'admin' pois Daily.co não reconhece 'master'
 				const dailyRole = req.user.role === 'master' ? 'admin' : req.user.role
 				
+				console.log('Gerando token para UTI:', {
+					utiId: uti.id,
+					roomName: uti.roomName,
+					roomLink: uti.roomLink,
+					userId: req.user.id,
+					userRole: req.user.role,
+					dailyRole,
+					userEmail: req.user.email
+				})
+				
 				const token = await this.dailyService.generateToken(
-					roomName,
+					uti.roomName,
 					req.user.id,
 					dailyRole as 'admin' | 'doctor' | 'patient',
 					{
@@ -300,8 +313,17 @@ export class UtiController {
 					},
 				})
 			} catch (tokenError) {
-				console.error('Error generating Daily.co token:', tokenError)
-				return res.status(500).send({ error: 'Failed to generate access token' })
+				console.error('❌ Error generating Daily.co token for UTI:', tokenError)
+				console.error('Error details:', {
+					message: tokenError instanceof Error ? tokenError.message : 'Unknown error',
+					stack: tokenError instanceof Error ? tokenError.stack : undefined,
+					utiId: uti.id,
+					roomName: uti.roomName,
+				})
+				return res.status(500).send({ 
+					error: 'Failed to generate access token',
+					details: tokenError instanceof Error ? tokenError.message : 'Unknown error'
+				})
 			}
 		} catch (error) {
 			console.error('Error getting room token:', error)

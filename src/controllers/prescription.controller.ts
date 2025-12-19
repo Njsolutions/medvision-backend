@@ -64,74 +64,93 @@ export class PrescriptionController {
 			// Cria a prescrição
 			const prescription = await prescriptionRepository.create(data)
 
-			// ✅ GERA ASSINATURA ELETRÔNICA AUTOMÁTICA
-			const { signatureService } = await import('../services/signature.service')
-			const { signatureRepository } = await import('../repositories/signature.repository')
-
-			const documentContent = {
-				id: prescription.id,
-				patientId: prescription.patientId,
-				doctorId: prescription.doctorId,
-				medicamentos: prescription.medicamentos,
-				orientacoesGerais: prescription.orientacoesGerais,
-				createdAt: prescription.createdAt,
-			}
-
-			const documentHash = signatureService.generateDocumentHash(JSON.stringify(documentContent))
-			const certificateId = `CERT-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
-
-			const signatureData = {
-				documentType: 'prescription' as const,
-				documentId: prescription.id,
-				documentHash,
-				certificateId,
-				signerId: prescription.doctorId,
-				signerName: prescription.doctor.user.name,
-				signerCRM: prescription.doctor.crm,
-				ipAddress: request.ip,
-				userAgent: request.headers['user-agent'] || 'Unknown',
-			}
-
-			const signature = signatureService.signDocument(signatureData)
-
-			await signatureRepository.create({
-				...signatureData,
-				signature,
+		// Busca dados completos do médico para a assinatura
+		const doctor = await prescriptionRepository.getDoctorWithUser(data.doctorId)
+		if (!doctor) {
+			return reply.status(404).send({
+				statusCode: 404,
+				error: 'Not Found',
+				message: 'Médico não encontrado',
 			})
+		}
 
-			const certificate = signatureService.generateCertificate({
-				certificateId,
-				signedBy: signatureData.signerName,
-				signedAt: new Date(),
-				documentHash: signatureData.documentHash,
-			})
+		// ✅ GERA ASSINATURA ELETRÔNICA AUTOMÁTICA
+		const { signatureService } = await import('../services/signature.service')
+		const { signatureRepository } = await import('../repositories/signature.repository')
 
-			// Log de auditoria
-			await auditService.logPrescriptionCreated(
-				request.user.id,
-				prescription.id,
-				{
-					patientId: data.patientId,
-					doctorId: data.doctorId,
-					medicamentosCount: data.medicamentos.length,
-					certificateId,
-				},
-				request.ip,
-				request.headers['user-agent'],
-			)
+		const documentContent = {
+			id: prescription.id,
+			patientId: prescription.patientId,
+			doctorId: prescription.doctorId,
+			medicamentos: prescription.medicamentos,
+			orientacoesGerais: prescription.orientacoesGerais,
+			createdAt: prescription.createdAt,
+		}
 
-			return reply.status(201).send({
-				statusCode: 201,
-				message: 'Prescrição criada e assinada com sucesso',
-				data: prescription,
-				signature: {
-					certificateId,
-					signedAt: new Date(),
-					signedBy: signatureData.signerName,
-					documentHash: signature.documentHash,
-					certificate,
-				},
-			})
+		const documentHash = signatureService.generateDocumentHash(documentContent)
+
+		const signatureData = {
+			documentHash,
+			signerId: doctor.userId,
+			signerName: doctor.user.name,
+			signerCRM: doctor.crm,
+			timestamp: new Date(),
+			ipAddress: request.ip,
+			userAgent: request.headers['user-agent'],
+			documentType: 'prescription' as const,
+			documentId: prescription.id,
+		}
+
+		const signatureResult = signatureService.signDocument(signatureData)
+
+		// Salva assinatura no banco
+		const signature = await signatureRepository.create({
+			certificateId: signatureResult.certificateId,
+			documentType: 'prescription',
+			documentId: prescription.id,
+			documentHash: signatureResult.documentHash,
+			signerId: doctor.userId,
+			signerName: doctor.user.name,
+			signerCRM: doctor.crm,
+			signerRole: 'doctor',
+			signature: signatureResult.signature,
+			ipAddress: request.ip,
+			userAgent: request.headers['user-agent'],
+			signedAt: signatureResult.timestamp,
+		})
+
+		// Gera certificado
+		const certificate = signatureService.generateCertificate(
+			signatureData,
+			signatureResult
+		)
+
+		// Log de auditoria
+		await auditService.logPrescriptionCreated(
+			request.user!.id,
+			prescription.id,
+			{
+				patientId: data.patientId,
+				doctorId: data.doctorId,
+				medicamentosCount: data.medicamentos.length,
+				certificateId: signature.certificateId,
+			},
+			request.ip,
+			request.headers['user-agent'],
+		)
+
+		return reply.status(201).send({
+			statusCode: 201,
+			message: 'Prescrição criada e assinada com sucesso',
+			data: prescription,
+			signature: {
+				certificateId: signature.certificateId,
+				signedAt: signature.signedAt,
+				signedBy: signature.signerName,
+				documentHash: signature.documentHash,
+				certificate,
+			},
+		})
 		} catch (error) {
 			if (error instanceof Error && error.name === 'ZodError') {
 				return reply.status(400).send({
@@ -429,7 +448,7 @@ export class PrescriptionController {
 				message: 'PDF gerado com sucesso',
 				data: {
 					pdf: base64PDF,
-					filename: `prescricao-${prescription.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
+					filename: `medvision-prescricao-${prescription.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
 					mimeType: 'application/pdf',
 					size: Buffer.from(base64PDF, 'base64').length,
 				},

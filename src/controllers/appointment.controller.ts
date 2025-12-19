@@ -1,5 +1,6 @@
 import { AppointmentRepository } from '@/repositories/appointment.repository'
 import { DoctorRepository } from '@/repositories/doctor.repository'
+import { UtiRepository } from '@/repositories/uti.repository'
 import { 
 	CreateAppointmentSchema, 
 	UpdateAppointmentSchema, 
@@ -18,11 +19,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 export class AppointmentController {
 	private appointmentRepository: AppointmentRepository
 	private doctorRepository: DoctorRepository
+	private utiRepository: UtiRepository
 	private dailyService: ReturnType<typeof createDailyService>
 
 	constructor(_fastify: FastifyInstance) {
 		this.appointmentRepository = new AppointmentRepository()
 		this.doctorRepository = new DoctorRepository()
+		this.utiRepository = new UtiRepository()
 		this.dailyService = createDailyService()
 	}
 
@@ -456,12 +459,13 @@ async list(req: FastifyRequest, res: FastifyReply) {
 
 			// Se o usuário é médico, buscar automaticamente o doctorId pelo userId do token
 			const isDoctor = req.user?.role === 'doctor'
+			let doctorProfile = null
 			if (isDoctor) {
-				const doctor = await this.doctorRepository.findByUserId(req.user.id)
-				if (!doctor) {
+				doctorProfile = await this.doctorRepository.findByUserId(req.user.id)
+				if (!doctorProfile) {
 					return res.status(404).send({ error: 'Doctor profile not found' })
 				}
-				filters.doctorId = doctor.id
+				filters.doctorId = doctorProfile.id
 			} else if (query.data.doctorId) {
 				filters.doctorId = query.data.doctorId
 			}
@@ -476,84 +480,110 @@ async list(req: FastifyRequest, res: FastifyReply) {
 
 			const result = await this.appointmentRepository.findAll(filters)
 
-			// Formatar arquivos com URLs para cada appointment
-			// Se for médico, remove os dados do próprio médico da resposta
-			const appointmentsWithFiles = await Promise.all(
-				result.appointments.map(async (appointment) => {
-					const formattedAppointment = {
-						...appointment,
-						patient: {
-							...appointment.patient,
-							files: appointment.patient.files ? await this.formatFiles(appointment.patient.files) : [],
-						},
-					}
+		// Buscar todas as UTIs ocupadas se o médico tiver acesso
+		let utiAccess: any[] = []
+		if (isDoctor && doctorProfile?.utiAccess) {
+			const allUtis = await this.utiRepository.findAll()
+			utiAccess = allUtis.filter(uti => uti.status === 'occupied')
+		}
 
-					// Adicionar roomUrl e tokens se a consulta tiver roomName
-					let roomData = {}
-					if (appointment.roomName) {
-						const roomUrl = `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${appointment.roomName}`
-						
-						// Gerar tokens apenas para consultas agendadas ou em progresso
-						if (appointment.status === 'scheduled' || appointment.status === 'inProgress') {
-							try {
-								const patientToken = await this.dailyService.generateToken(
-									appointment.roomName,
-									appointment.patientId,
-									'patient',
-									{
-										userName: appointment.patient.user.name,
-										expiresIn: 86400,
-									}
-								)
+		// Formatar arquivos com URLs para cada appointment
+		// Se for médico, remove os dados do próprio médico da resposta
+		const appointmentsWithFiles = await Promise.all(
+			result.appointments.map(async (appointment) => {
+				// Se for médico, remover dados de contato e endereço do paciente
+				let patientData = {
+					...appointment.patient,
+					files: appointment.patient.files ? await this.formatFiles(appointment.patient.files) : [],
+					uti: undefined, // Remove a relação uti direta
+				}
 
-								const doctorToken = await this.dailyService.generateToken(
-									appointment.roomName,
-									appointment.doctorId,
-									'doctor',
-									{
-										userName: appointment.doctor.user.name,
-										expiresIn: 86400,
-									}
-								)
-
-								// Gerar token para admin/master
-								let adminToken: string | undefined
-								if (req.user?.role === 'admin' || req.user?.role === 'master') {
-									adminToken = await this.dailyService.generateToken(
-										appointment.roomName,
-										req.user.id,
-										'admin',
-										{
-											userName: req.user.name || 'Admin',
-											expiresIn: 86400,
-										}
-									)
-								}
-
-								roomData = { roomUrl, patientToken, doctorToken, ...(adminToken && { adminToken }) }
-							} catch (error) {
-								console.error('Error generating tokens for appointment:', appointment.id, error)
-								roomData = { roomUrl }
-							}
-						} else {
-							roomData = { roomUrl }
+				if (isDoctor) {
+					// Remove dados sensíveis do paciente para médicos
+					patientData = {
+						...patientData,
+						address: undefined,
+						user: {
+							...patientData.user,
+							phone: undefined,
+							email: undefined,
+							cpf: undefined,
 						}
 					}
+				}
 
-					// Remove dados do médico se quem está buscando é o próprio médico
-					if (isDoctor) {
-						const { doctor: _doctor, ...appointmentWithoutDoctor } = formattedAppointment
-						return { ...appointmentWithoutDoctor, ...roomData }
+				const formattedAppointment = {
+					...appointment,
+					patient: patientData,
+				}
+
+				// Adicionar roomUrl e tokens se a consulta tiver roomName
+				let roomData = {}
+				if (appointment.roomName) {
+					const roomUrl = `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${appointment.roomName}`
+					
+					// Gerar tokens apenas para consultas agendadas ou em progresso
+					if (appointment.status === 'scheduled' || appointment.status === 'inProgress') {
+						try {
+							const patientToken = await this.dailyService.generateToken(
+								appointment.roomName,
+								appointment.patientId,
+								'patient',
+								{
+									userName: appointment.patient.user.name,
+									expiresIn: 86400,
+								}
+							)
+
+							const doctorToken = await this.dailyService.generateToken(
+								appointment.roomName,
+								appointment.doctorId,
+								'doctor',
+								{
+									userName: appointment.doctor.user.name,
+									expiresIn: 86400,
+								}
+							)
+
+							// Gerar token para admin/master
+							let adminToken: string | undefined
+							if (req.user?.role === 'admin' || req.user?.role === 'master') {
+								adminToken = await this.dailyService.generateToken(
+									appointment.roomName,
+									req.user.id,
+									'admin',
+									{
+										userName: req.user.name || 'Admin',
+										expiresIn: 86400,
+									}
+								)
+							}
+
+							roomData = { roomUrl, patientToken, doctorToken, ...(adminToken && { adminToken }) }
+						} catch (error) {
+							console.error('Error generating tokens for appointment:', appointment.id, error)
+							roomData = { roomUrl }
+						}
+					} else {
+						roomData = { roomUrl }
 					}
+				}
 
-					return { ...formattedAppointment, ...roomData }
-				})
-			)
+				// Remove dados do médico se quem está buscando é o próprio médico
+				if (isDoctor) {
+					const { doctor: _doctor, ...appointmentWithoutDoctor } = formattedAppointment
+					return { ...appointmentWithoutDoctor, ...roomData }
+				}
+
+				return { ...formattedAppointment, ...roomData }
+			})
+		)
 
 			return res.status(200).send({
 				message: 'Appointments retrieved successfully',
 				data: appointmentsWithFiles,
 				pagination: result.pagination,
+				...(isDoctor && doctorProfile?.utiAccess && { utiAccess }),
 			})
 		} catch (error) {
 			console.error('Error listing appointments:', error)

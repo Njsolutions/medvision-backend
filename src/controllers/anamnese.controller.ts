@@ -30,77 +30,83 @@ export class AnamneseController {
 			// Cria a anamnese
 			const anamnese = await anamneseRepository.create(validation.data);
 
-			// ✅ GERA ASSINATURA ELETRÔNICA AUTOMÁTICA
-			const documentContent = {
-				id: anamnese.id,
+		// Busca dados completos do usuário/médico para a assinatura
+		const user = await anamneseRepository.getUserWithDoctor(req.user!.id);
+		if (!user) {
+			return res.status(401).send({ error: 'Usuário não encontrado' });
+		}
+
+		// ✅ GERA ASSINATURA ELETRÔNICA AUTOMÁTICA
+		const documentContent = {
+			id: anamnese.id,
+			patientId: anamnese.patientId,
+			doctorId: anamnese.doctorId,
+			appointmentId: anamnese.appointmentId,
+			queixaPrincipal: anamnese.queixaPrincipal,
+			hdaInicio: anamnese.hdaInicio,
+			hdaDuracao: anamnese.hdaDuracao,
+			hipoteseDiagnostica: anamnese.hipoteseDiagnostica,
+			cid10: anamnese.cid10,
+			condutaClinica: anamnese.condutaClinica,
+			createdAt: anamnese.createdAt,
+		};
+
+		const documentHash = signatureService.generateDocumentHash(documentContent);
+
+		const signatureData = {
+			documentHash,
+			signerId: user.id,
+			signerName: user.name,
+			signerCRM: user.doctor?.crm,
+			timestamp: new Date(),
+			ipAddress: req.ip,
+			userAgent: req.headers['user-agent'],
+			documentType: 'anamnese',
+			documentId: anamnese.id,
+		};
+
+		const signatureResult = signatureService.signDocument(signatureData);
+
+		// Salva assinatura no banco
+		const signature = await signatureRepository.create({
+			certificateId: signatureResult.certificateId,
+			documentType: 'anamnese',
+			documentId: anamnese.id,
+			documentHash: signatureResult.documentHash,
+			signerId: user.id,
+			signerName: user.name,
+			signerCRM: user.doctor?.crm,
+			signerRole: user.role,
+			signature: signatureResult.signature,
+			ipAddress: req.ip,
+			userAgent: req.headers['user-agent'],
+			signedAt: signatureResult.timestamp,
+		});
+
+		// Gera certificado
+		const certificate = signatureService.generateCertificate(
+			signatureData,
+			signatureResult
+		);
+
+		// Audit log
+		await auditService.log({
+			userId: user.id,
+			action: 'CREATE_ANAMNESE',
+			description: `Anamnese criada e assinada eletronicamente para paciente ${validation.data.patientId}`,
+			content: {
+				anamneseId: anamnese.id,
 				patientId: anamnese.patientId,
 				doctorId: anamnese.doctorId,
 				appointmentId: anamnese.appointmentId,
-				queixaPrincipal: anamnese.queixaPrincipal,
-				hdaInicio: anamnese.hdaInicio,
-				hdaDuracao: anamnese.hdaDuracao,
-				hipoteseDiagnostica: anamnese.hipoteseDiagnostica,
-				cid10: anamnese.cid10,
-				condutaClinica: anamnese.condutaClinica,
-				createdAt: anamnese.createdAt,
-			};
+				certificateId: signature.certificateId,
+			},
+			impactLevel: ImpactLevel.MEDIUM,
+			ipAddress: req.ip,
+			userAgent: req.headers['user-agent'],
+		});
 
-			const documentHash = signatureService.generateDocumentHash(documentContent);
-
-			const signatureData = {
-				documentHash,
-				signerId: req.user.sub,
-				signerName: req.user.name,
-				signerCRM: req.user.doctor?.crm,
-				timestamp: new Date(),
-				ipAddress: req.ip,
-				userAgent: req.headers['user-agent'],
-				documentType: 'anamnese',
-				documentId: anamnese.id,
-			};
-
-			const signatureResult = signatureService.signDocument(signatureData);
-
-			// Salva assinatura no banco
-			const signature = await signatureRepository.create({
-				certificateId: signatureResult.certificateId,
-				documentType: 'anamnese',
-				documentId: anamnese.id,
-				documentHash: signatureResult.documentHash,
-				signerId: req.user.sub,
-				signerName: req.user.name,
-				signerCRM: req.user.doctor?.crm,
-				signerRole: req.user.role,
-				signature: signatureResult.signature,
-				ipAddress: req.ip,
-				userAgent: req.headers['user-agent'],
-				signedAt: signatureResult.timestamp,
-			});
-
-			// Gera certificado
-			const certificate = signatureService.generateCertificate(
-				signatureData,
-				signatureResult
-			);
-
-			// Audit log
-			await auditService.log({
-				userId: req.user.sub,
-				action: 'CREATE_ANAMNESE',
-				description: `Anamnese criada e assinada eletronicamente para paciente ${validation.data.patientId}`,
-				content: {
-					anamneseId: anamnese.id,
-					patientId: anamnese.patientId,
-					doctorId: anamnese.doctorId,
-					appointmentId: anamnese.appointmentId,
-					certificateId: signature.certificateId,
-				},
-				impactLevel: ImpactLevel.MEDIUM,
-				ipAddress: req.ip,
-				userAgent: req.headers['user-agent'],
-			});
-
-			return res.status(201).send({
+		return res.status(201).send({
 				message: 'Anamnese criada e assinada com sucesso',
 				data: anamnese,
 				signature: {
@@ -244,7 +250,7 @@ export class AnamneseController {
 
 			// Audit log
 			await auditService.log({
-				userId: req.user.sub,
+				userId: req.user!.id,
 				action: 'UPDATE_ANAMNESE',
 				description: `Anamnese ${anamnese.id} atualizada`,
 				content: {
@@ -289,7 +295,7 @@ export class AnamneseController {
 
 			// Audit log
 			await auditService.log({
-				userId: req.user.sub,
+				userId: req.user!.id,
 				action: 'DELETE_ANAMNESE',
 				description: `Anamnese ${validation.data.id} deletada`,
 				content: {
@@ -326,10 +332,17 @@ export class AnamneseController {
 			}
 
 			// Verifica permissão (somente médico que criou, paciente ou admin)
-			const userId = req.user.sub;
-			const isDoctor = anamnese.doctorId === req.user.doctor?.id;
-			const isPatient = anamnese.patientId === req.user.patient?.id;
-			const isAdmin = req.user.role === 'admin' || req.user.role === 'master';
+			const userId = req.user!.id;
+			
+			// Busca o usuário com informações de doctor/patient
+			const user = await anamneseRepository.getUserWithDoctor(userId);
+			if (!user) {
+				return res.status(401).send({ error: 'Usuário não encontrado' });
+			}
+			
+			const isDoctor = anamnese.doctorId === user.doctor?.id;
+			const isPatient = anamnese.patientId === userId; // patientId é o userId
+			const isAdmin = user.role === 'admin' || user.role === 'master';
 
 			if (!isDoctor && !isPatient && !isAdmin) {
 				return res.status(403).send({ 
@@ -383,7 +396,7 @@ export class AnamneseController {
 				message: 'PDF gerado com sucesso',
 				data: {
 					pdf: base64PDF,
-					filename: `anamnese-${anamnese.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
+					filename: `medvision-anamnese-${anamnese.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
 					mimeType: 'application/pdf',
 					size: Buffer.from(base64PDF, 'base64').length,
 				},

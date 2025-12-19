@@ -293,6 +293,25 @@ export class AnamneseRepository {
 			where: { id },
 		});
 	}
+
+	async getUserWithDoctor(userId: string) {
+		return db.user.findUnique({
+			where: { id: userId },
+			select: {
+				id: true,
+				name: true,
+				email: true,
+				role: true,
+				doctor: {
+					select: {
+						id: true,
+						crm: true,
+						specialty: true,
+					},
+				},
+			},
+		});
+	}
 }
 
 export const anamneseRepository = new AnamneseRepository();

@@ -43,7 +43,7 @@ export class StorageService {
 	generateStorageKey(patientId: string, fileName: string): string {
 		const timestamp = Date.now()
 		const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_')
-		return `patients/${patientId}/${timestamp}-${sanitizedFileName}`
+		return `patients/${patientId}/medvision-${timestamp}-${sanitizedFileName}`
 	}
 
 	/**

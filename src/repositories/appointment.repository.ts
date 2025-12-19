@@ -516,6 +516,7 @@ export class AppointmentRepository {
 									createdAt: 'desc',
 								},
 							},
+							uti: true,
 						},
 					},
 					doctor: {

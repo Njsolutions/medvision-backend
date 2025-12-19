@@ -46,8 +46,10 @@ export function createDailyService(): DailyService {
 						enable_recording: 'cloud',
 						enable_knocking: false,
 						enable_network_ui: false,
-						enable_prejoin_ui: true,
-						eject_at_room_exp: false, // Não ejeta usuários quando a sala expirar
+						enable_prejoin_ui: false, // Desabilitar prejoin para evitar problemas com token
+						eject_at_room_exp: false,
+						start_video_off: false,
+						start_audio_off: false,
 					},
 					// Não definir 'exp' para que a sala seja permanente
 				}),
@@ -127,17 +129,26 @@ export function createDailyService(): DailyService {
 				expiresIn: options?.expiresIn || 3600,
 			})
 
+			const tokenProperties: any = {
+				room_name: roomName,
+				user_name: options?.userName || 'Usuário',
+				user_id: String(userId),
+				exp: Math.floor(Date.now() / 1000) + (options?.expiresIn || 3600),
+				is_owner: isOwner,
+			}
+
+			// Adiciona permissões válidas para tokens
+			if (isOwner) {
+				tokenProperties.enable_screenshare = true
+				tokenProperties.start_video_off = false
+				tokenProperties.start_audio_off = false
+			}
+
 			const response = await fetch(`${baseUrl}/meeting-tokens`, {
 				method: 'POST',
 				headers,
 				body: JSON.stringify({
-					properties: {
-						room_name: roomName,
-						user_name: options?.userName || 'Usuário',
-						user_id: String(userId),
-						exp: Math.floor(Date.now() / 1000) + (options?.expiresIn || 3600),
-						is_owner: isOwner,
-					},
+					properties: tokenProperties,
 				}),
 			})
 

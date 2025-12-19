@@ -73,53 +73,63 @@ export class RequestController {
 					createdAt: request.createdAt,
 				}
 
-				const documentHash = signatureService.generateDocumentHash(JSON.stringify(documentContent))
-				const certificateId = `CERT-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+			const documentHash = signatureService.generateDocumentHash(documentContent)
 
-				const signatureData = {
-					documentType: 'request' as const,
-					documentId: request.id,
-					documentHash,
-					certificateId,
-					signerId: doctor.id,
-					signerName: doctor.user.name,
-					signerCRM: doctor.crm,
-					ipAddress: req.ip,
-					userAgent: req.headers['user-agent'] || 'Unknown',
-				}
-
-				const signature = signatureService.signDocument(signatureData)
-
-				await signatureRepository.create({
-					...signatureData,
-					signature,
-				})
-
-				signaturesData.push({
-					requestId: request.id,
-					certificateId,
-					signedAt: new Date(),
-				})
-			}
-
-			// Registra auditoria
-			await auditService.log({
-				userId,
-				action: 'CREATE_REQUESTS',
-				description: `Criou e assinou ${requests.length} solicitação(ões) para o paciente ${patient.user.name}`,
-				content: {
-					requestIds: requests.map((r) => r.id),
-					patientId: data.patientId,
-					doctorId: data.doctorId,
-					count: requests.length,
-					certificates: signaturesData,
-				},
-				impactLevel: 'medium',
+			const signatureData = {
+				documentHash,
+				signerId: doctor.userId,
+				signerName: doctor.user.name,
+				signerCRM: doctor.crm,
+				timestamp: new Date(),
 				ipAddress: req.ip,
 				userAgent: req.headers['user-agent'],
+				documentType: 'request' as const,
+				documentId: request.id,
+			}
+
+			const signatureResult = signatureService.signDocument(signatureData)
+
+			// Salva assinatura no banco
+			await signatureRepository.create({
+				certificateId: signatureResult.certificateId,
+				documentType: 'request',
+				documentId: request.id,
+				documentHash: signatureResult.documentHash,
+				signerId: doctor.userId,
+				signerName: doctor.user.name,
+				signerCRM: doctor.crm,
+				signerRole: 'doctor',
+				signature: signatureResult.signature,
+				ipAddress: req.ip,
+				userAgent: req.headers['user-agent'],
+				signedAt: signatureResult.timestamp,
 			})
 
-			return res.status(201).send({
+			signaturesData.push({
+				requestId: request.id,
+				certificateId: signatureResult.certificateId,
+				signedAt: signatureResult.timestamp,
+			})
+		}
+
+		// Registra auditoria
+		await auditService.log({
+			userId,
+			action: 'CREATE_REQUESTS',
+			description: `Criou e assinou ${requests.length} solicitação(ões) para o paciente ${patient.user.name}`,
+			content: {
+				requestIds: requests.map((r) => r.id),
+				patientId: data.patientId,
+				doctorId: data.doctorId,
+				count: requests.length,
+				certificates: signaturesData,
+			},
+			impactLevel: 'medium',
+			ipAddress: req.ip,
+			userAgent: req.headers['user-agent'],
+		})
+
+		return res.status(201).send({
 				success: true,
 				message: `${requests.length} solicitação(ões) criada(s) e assinada(s) com sucesso`,
 				data: requests,
@@ -462,7 +472,7 @@ export class RequestController {
 				message: 'PDF gerado com sucesso',
 				data: {
 					pdf: base64PDF,
-					filename: `solicitacao-${request.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
+					filename: `medvision-solicitacao-${request.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
 					mimeType: 'application/pdf',
 					size: Buffer.from(base64PDF, 'base64').length,
 				},

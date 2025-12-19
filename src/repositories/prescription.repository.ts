@@ -296,6 +296,25 @@ export class PrescriptionRepository {
 		})
 		return count > 0
 	}
+
+	/**
+	 * Busca médico com dados do usuário
+	 */
+	async getDoctorWithUser(doctorId: string) {
+		return await db.doctor.findUnique({
+			where: { id: doctorId },
+			include: {
+				user: {
+					select: {
+						id: true,
+						name: true,
+						email: true,
+						cpf: true,
+					},
+				},
+			},
+		})
+	}
 }
 
 export const prescriptionRepository = new PrescriptionRepository()

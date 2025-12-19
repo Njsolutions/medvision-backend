@@ -112,6 +112,7 @@ model Uti {
 
   status   StatusUti @default(available)
   roomLink String?
+  roomName String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
