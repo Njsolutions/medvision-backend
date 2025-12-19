@@ -17,6 +17,7 @@ import { triagemRoutes } from './routes/triagem.routes'
 import { patientFileRoutes } from './routes/patientfile.routes'
 import { requestRoutes } from './routes/request.routes'
 import { prescriptionRoutes } from './routes/prescription.routes'
+import { anamneseRoutes } from './routes/anamnese.routes'
 import { auditContextDecorator } from './plugins/audit.plugin'
 import authPlugin from './plugins/auth.plugin'
 import { cronService } from './services/cron.service'
@@ -81,6 +82,7 @@ server.register(triagemRoutes, { prefix: `/v${version}/triagens` })
 server.register(patientFileRoutes, { prefix: `/v${version}/patient-files` })
 server.register(requestRoutes, { prefix: `/v${version}/requests` })
 server.register(prescriptionRoutes, { prefix: `/v${version}/prescriptions` })
+server.register(anamneseRoutes, { prefix: `/v${version}/anamneses` })
 
 async function start() {
 	try {

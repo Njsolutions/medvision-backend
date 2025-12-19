@@ -115,6 +115,24 @@ export class AppointmentRepository {
 						createdAt: 'desc',
 					},
 				},
+				anamneses: {
+					include: {
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
 			},
 		})
 	}
@@ -223,6 +241,24 @@ export class AppointmentRepository {
 						createdAt: 'desc',
 					},
 				},
+				anamneses: {
+					include: {
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
 			},
 		})
 	}
@@ -315,6 +351,24 @@ export class AppointmentRepository {
 								},
 							},
 						},
+						doctor: {
+							include: {
+								user: {
+									select: {
+										id: true,
+										name: true,
+										email: true,
+									},
+								},
+							},
+						},
+					},
+					orderBy: {
+						createdAt: 'desc',
+					},
+				},
+				anamneses: {
+					include: {
 						doctor: {
 							include: {
 								user: {
@@ -523,6 +577,24 @@ export class AppointmentRepository {
 									},
 								},
 							},
+							doctor: {
+								include: {
+									user: {
+										select: {
+											id: true,
+											name: true,
+											email: true,
+										},
+									},
+								},
+							},
+						},
+						orderBy: {
+							createdAt: 'desc',
+						},
+					},
+					anamneses: {
+						include: {
 							doctor: {
 								include: {
 									user: {

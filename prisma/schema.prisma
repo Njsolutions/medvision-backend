@@ -214,6 +214,7 @@ model Appointment {
   prescriptions   Prescription[]
   triagens        Triagem[]
   requests        Request[]
+  anamneses       Anaminese[]
 
   @@unique([patientId, doctorId, appointmentDate])
   @@index([doctorId])
@@ -282,18 +283,58 @@ model Request {
 }
 
 model Anaminese {
-  id        String @id @default(uuid())
-  patientId String
-  doctorId  String
-  content   String
+  id            String       @id @default(uuid())
+  patientId     String
+  doctorId      String
+  appointmentId String?
+  
+  // Queixa Principal e HDA
+  queixaPrincipal        String?
+  hdaInicio              String?
+  hdaDuracao             String?
+  hdaIntensidade         String?
+  hdaCaracteristica      String?
+  hdaLocalizacao         String?
+  hdaIrradiacao          String?
+  hdaFatoresMelhora      String?
+  hdaFatoresPiora        String?
+  hdaSintomasAssociados  String?
+  hdaEvolucao            String?
+  
+  // Sinais Vitais
+  pressaoArterial         String?
+  frequenciaCardiaca      String?
+  frequenciaRespiratoria  String?
+  temperatura             String?
+  saturacaoO2             String?
+  peso                    String?
+  altura                  String?
+  imc                     String?
+  
+  // Histórico
+  historicoMedico         String?
+  medicamentosEmUso       String?
+  alergias                String?
+  historicoFamiliar       String?
+  habitosVida             String?
+  
+  // Exame Físico e Diagnóstico
+  revisaoSistemas         String?
+  examesFisicos           String?
+  hipoteseDiagnostica     String?
+  cid10                   String?
+  diagnosticosDiferenciais String?
+  condutaClinica          String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  patient   Patient  @relation(fields: [patientId], references: [id])
-  doctor    Doctor   @relation(fields: [doctorId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  patient   Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor    Doctor      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@index([patientId])
   @@index([doctorId])
+  @@index([appointmentId])
   @@map("anamneses")
 }
 
