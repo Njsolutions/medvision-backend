@@ -33,12 +33,11 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
 
-# Instalar apenas dependências de produção
-RUN pnpm install --frozen-lockfile --prod
+# Instalar dependências
+RUN pnpm install --frozen-lockfile
 
-# Copiar Prisma Client gerado do builder
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# Copiar node_modules do builder (inclui Prisma Client gerado)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copiar código fonte do stage anterior
 COPY --from=builder /app/src ./src
