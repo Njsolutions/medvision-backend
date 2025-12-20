@@ -53,10 +53,9 @@ docker compose up -d --build
 echo -e "${BLUE}⏳ Aguardando banco de dados...${NC}"
 sleep 10
 
-# Executar inicialização do banco
-echo -e "${BLUE}🗄️  Inicializando banco de dados...${NC}"
-chmod +x init-db.sh
-./init-db.sh
+# Executar migrations do banco
+echo -e "${BLUE}🗄️  Executando migrations...${NC}"
+docker compose exec -T app pnpm run db:migrate
 
 # Executar seed do admin
 echo -e "${BLUE}🌱 Criando admin inicial...${NC}"
