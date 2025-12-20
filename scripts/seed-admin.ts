@@ -12,12 +12,12 @@ async function seedAdmin() {
 		const adminPassword = process.env.ADMIN_PASSWORD || '@senhaforte123'
 		const adminName = process.env.ADMIN_NAME || 'Natanael Souza'
 
-		// Verificar se o admin já existe
-		const existingAdmin = await prisma.admin.findUnique({
+		// Verificar se o usuário admin já existe
+		const existingUser = await prisma.user.findUnique({
 			where: { email: adminEmail },
 		})
 
-		if (existingAdmin) {
+		if (existingUser) {
 			console.log(`⚠️  Admin com email ${adminEmail} já existe. Pulando seed...`)
 			return
 		}
@@ -25,12 +25,23 @@ async function seedAdmin() {
 		// Hash da senha
 		const hashedPassword = await bcrypt.hash(adminPassword, 10)
 
-		// Criar admin
-		const admin = await prisma.admin.create({
+		// Criar usuário admin
+		const user = await prisma.user.create({
 			data: {
 				name: adminName,
+				cpf: '00000000000',
+				phone: '00000000000',
 				email: adminEmail,
 				password: hashedPassword,
+				role: 'admin',
+				admin: {
+					create: {
+						utiAccess: true,
+					},
+				},
+			},
+			include: {
+				admin: true,
 			},
 		})
 
@@ -38,7 +49,7 @@ async function seedAdmin() {
 		console.log('📧 Email:', adminEmail)
 		console.log('🔑 Senha:', adminPassword)
 		console.log('⚠️  IMPORTANTE: Altere a senha após o primeiro login!')
-		console.log('👤 ID:', admin.id)
+		console.log('👤 ID:', user.id)
 	} catch (error) {
 		console.error('❌ Erro ao criar admin:', error)
 		throw error
