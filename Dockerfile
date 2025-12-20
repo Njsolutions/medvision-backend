@@ -36,9 +36,6 @@ COPY prisma ./prisma
 # Instalar apenas dependências de produção
 RUN pnpm install --frozen-lockfile --prod
 
-# Copiar Prisma Client gerado do builder
-COPY --from=builder /app/src/generated ./src/generated
-
 # Copiar código fonte do stage anterior
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/scripts ./scripts
