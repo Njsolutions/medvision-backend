@@ -37,7 +37,8 @@ fi
 # Pull das últimas mudanças (se estiver em um repositório git)
 if [ -d .git ]; then
     echo -e "${BLUE}📥 Baixando últimas atualizações...${NC}"
-    git pull
+    git fetch origin
+    git reset --hard origin/main
 fi
 
 # Parar containers existentes
