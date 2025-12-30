@@ -89,6 +89,7 @@ export class UtiRepository {
 			data: {
 				...(statusToSet && { status: statusToSet }),
 				...(data.roomLink !== undefined && { roomLink: data.roomLink }),
+				...(data.roomName !== undefined && { roomName: data.roomName }),
 				...(data.patientId !== undefined && {
 					patient: data.patientId ? { connect: { id: data.patientId } } : { disconnect: true },
 				}),

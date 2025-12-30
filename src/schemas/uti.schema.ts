@@ -10,6 +10,7 @@ export const UpdateUtiSchema = z.object({
 	patientId: z.string().uuid('Invalid patient ID').nullable().optional(),
 	status: z.enum(['available', 'occupied']).optional(),
 	roomLink: z.string().url('Invalid room link').nullable().optional(),
+	roomName: z.string().nullable().optional(),
 })
 
 export const UtiIdSchema = z.object({
