@@ -16,11 +16,13 @@ interface WeeklyAvailability {
  * Valida se o médico está disponível no dia e horário especificado
  * @param weeklyAvailability - JSON com a disponibilidade semanal do médico
  * @param appointmentDate - Data e hora da consulta
+ * @param durationMinutes - Duração da consulta em minutos (padrão: 60)
  * @returns objeto com isAvailable e mensagem de erro se não disponível
  */
 export function validateDoctorAvailability(
 	weeklyAvailability: any,
-	appointmentDate: Date
+	appointmentDate: Date,
+	durationMinutes: number = 60
 ): { isAvailable: boolean; message?: string } {
 	if (!weeklyAvailability) {
 		return {
@@ -82,6 +84,7 @@ export function validateDoctorAvailability(
 	const appointmentHour = appointmentDate.getHours()
 	const appointmentMinute = appointmentDate.getMinutes()
 	const appointmentTimeInMinutes = appointmentHour * 60 + appointmentMinute
+	const appointmentEndTimeInMinutes = appointmentTimeInMinutes + durationMinutes
 
 	// Verificar cada período de disponibilidade do dia
 	if (!daySchedule.periods || daySchedule.periods.length === 0) {
@@ -107,8 +110,9 @@ export function validateDoctorAvailability(
 		const startTimeInMinutes = startHour * 60 + startMinute
 		const endTimeInMinutes = endHour * 60 + endMinute
 
-		// Verificar se a consulta está dentro deste período
-		if (appointmentTimeInMinutes >= startTimeInMinutes && appointmentTimeInMinutes < endTimeInMinutes) {
+		// Verificar se a consulta INTEIRA está dentro deste período
+		// A consulta deve começar dentro do período E terminar dentro do período
+		if (appointmentTimeInMinutes >= startTimeInMinutes && appointmentEndTimeInMinutes <= endTimeInMinutes) {
 			return { isAvailable: true }
 		}
 	}

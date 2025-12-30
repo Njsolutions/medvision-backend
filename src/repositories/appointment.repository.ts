@@ -419,16 +419,59 @@ export class AppointmentRepository {
 		})
 	}
 
-	async checkConflict(patientId: string, doctorId: string, appointmentDate: Date) {
-		return db.appointment.findUnique({
+	async checkConflict(
+		patientId: string, 
+		doctorId: string, 
+		appointmentDate: Date, 
+		durationMinutes: number = 60,
+		excludeAppointmentId?: string
+	) {
+		// Calcular o fim da consulta
+		const appointmentEnd = new Date(appointmentDate.getTime() + durationMinutes * 60 * 1000)
+		
+		// Buscar consultas que possam ter conflito de horário
+		const conflicts = await db.appointment.findMany({
 			where: {
-				patientId_doctorId_appointmentDate: {
-					patientId,
-					doctorId,
-					appointmentDate,
+				OR: [
+					{ doctorId }, // Conflito de médico
+					{ patientId }, // Conflito de paciente
+				],
+				status: {
+					notIn: ['cancelled', 'noShow', 'completed'], // Ignorar consultas finalizadas
 				},
+				// Excluir a própria consulta se estiver atualizando
+				...(excludeAppointmentId && {
+					id: { not: excludeAppointmentId },
+				}),
+			},
+			select: {
+				id: true,
+				appointmentDate: true,
+				durationMinutes: true,
+				doctorId: true,
+				patientId: true,
 			},
 		})
+
+		// Verificar sobreposição de horários
+		for (const existing of conflicts) {
+			const existingEnd = new Date(
+				existing.appointmentDate.getTime() + (existing.durationMinutes || 60) * 60 * 1000
+			)
+
+			// Verifica se há sobreposição:
+			// 1. Nova consulta começa antes do fim da existente E
+			// 2. Nova consulta termina depois do início da existente
+			const hasOverlap = 
+				appointmentDate < existingEnd && 
+				appointmentEnd > existing.appointmentDate
+
+			if (hasOverlap) {
+				return existing // Retorna a consulta conflitante
+			}
+		}
+
+		return null // Sem conflitos
 	}
 
 	async findAll(filters?: {

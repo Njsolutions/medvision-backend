@@ -90,13 +90,27 @@ export class AppointmentController {
 
 	// Validar disponibilidade do médico
 	const appointmentDate = new Date(data.data.appointmentDate)
+	
+	console.log('🔍 Validando disponibilidade do médico:', {
+		doctorId: data.data.doctorId,
+		doctorName: doctorExists.user.name,
+		appointmentDate: appointmentDate.toISOString(),
+		localDate: appointmentDate.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+		dayOfWeek: appointmentDate.getDay(),
+		hours: appointmentDate.getHours(),
+		minutes: appointmentDate.getMinutes(),
+		weeklyAvailability: doctorExists.weeklyAvailability
+	})
+	
 	const availabilityCheck = validateDoctorAvailability(
 		doctorExists.weeklyAvailability,
-		appointmentDate
+		appointmentDate,
+		data.data.durationMinutes
 	)
 
 	if (!availabilityCheck.isAvailable) {
 		const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability)
+		console.log('❌ Médico indisponível:', availabilityCheck.message)
 		return res.status(400).send({ 
 			error: 'Horário indisponível',
 			message: availabilityCheck.message,
@@ -105,20 +119,40 @@ export class AppointmentController {
 		})
 	}
 
+	console.log('✅ Médico disponível no horário solicitado')
+
 	// Verificar conflitos de horário
 			const conflict = await this.appointmentRepository.checkConflict(
 				data.data.patientId,
 				data.data.doctorId,
 				appointmentDate,
+				data.data.durationMinutes
 			)
 
 			if (conflict) {
 			const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability)
+			const conflictType = conflict.doctorId === data.data.doctorId ? 'médico' : 'paciente'
+			const conflictTime = new Date(conflict.appointmentDate).toLocaleString('pt-BR', { 
+				timeZone: 'America/Sao_Paulo',
+				hour: '2-digit',
+				minute: '2-digit'
+			})
+			
+			console.log('❌ Conflito de horário detectado:', {
+				conflictType,
+				conflictingAppointmentId: conflict.id,
+				conflictTime
+			})
+			
 			return res.status(409).send({ 
 				error: 'Conflito de horário',
-			message: 'Já existe uma consulta agendada para este médico ou paciente neste horário. Escolha outro horário disponível.',
+			message: `Já existe uma consulta agendada para este ${conflictType} no horário ${conflictTime}. Escolha outro horário disponível.`,
 			doctorName: doctorExists.user.name,
-			doctorSchedule: schedule
+			doctorSchedule: schedule,
+			conflictDetails: {
+				type: conflictType,
+				time: conflictTime
+			}
 		})
 	}
 
@@ -284,9 +318,12 @@ if (!existingAppointment) {
 				})
 			}
 			
+			const newDuration = data.data.durationMinutes || existingAppointment.durationMinutes || 60
+			
 			const availabilityCheck = validateDoctorAvailability(
 				doctorExists.weeklyAvailability,
-				newDate
+				newDate,
+				newDuration
 			)
 
 			if (!availabilityCheck.isAvailable) {
@@ -298,6 +335,26 @@ if (!existingAppointment) {
 				doctorSchedule: schedule
 			})
 		}
+			
+			// Verificar conflitos na nova data
+			const conflict = await this.appointmentRepository.checkConflict(
+				existingAppointment.patientId,
+				existingAppointment.doctorId,
+				newDate,
+				newDuration,
+				params.data.id // Excluir a própria consulta
+			)
+			
+			if (conflict) {
+				const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability)
+				const conflictType = conflict.doctorId === existingAppointment.doctorId ? 'médico' : 'paciente'
+				return res.status(409).send({ 
+					error: 'Conflito de horário',
+					message: `Já existe uma consulta agendada para este ${conflictType} no novo horário escolhido.`,
+					doctorName: doctorExists.user.name,
+					doctorSchedule: schedule
+				})
+			}
 
 		if (newDate.getTime() !== oldDate.getTime()) {
 			// Deletar sala antiga se existir

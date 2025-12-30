@@ -264,18 +264,21 @@ export class UtiController {
 				return res.status(400).send({ error: 'Invalid UTI ID', details: params.error })
 			}
 
-			const uti = await this.utiRepository.findById(params.data.id)
+let uti = await this.utiRepository.findById(params.data.id)
 
-			if (!uti) {
-				return res.status(404).send({ error: 'UTI bed not found' })
-			}
+		if (!uti) {
+			return res.status(404).send({ error: 'UTI bed not found' })
+		}
 
-			if (!uti.roomLink) {
-				return res.status(404).send({ error: 'No video room associated with this UTI bed' })
-			}
+		if (!uti.roomLink) {
+			return res.status(404).send({ error: 'No video room associated with this UTI bed' })
+		}
 
-			if (!uti.roomName) {
-				return res.status(404).send({ error: 'No room name associated with this UTI bed' })
+		// Se não tiver roomName, gera e atualiza automaticamente
+		if (!uti.roomName) {
+			const roomName = `uti-bed-${uti.id}`
+			uti = await this.utiRepository.update(uti.id, { roomName })
+			console.log(`✓ RoomName gerado automaticamente para UTI ${uti.id}: ${roomName}`)
 			}
 
 			// Gera token de acesso
