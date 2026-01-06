@@ -901,7 +901,11 @@ async list(req: FastifyRequest, res: FastifyReply) {
 			action: 'GENERATE_APPOINTMENT_COMPLETE_PDF',
 			description: `Gerou PDF completo da consulta ${appointment.id}`,
 			impactLevel: ImpactLevel.LOW,
-				},
+			content: {
+				appointmentId: appointment.id,
+				patientId: appointment.patientId,
+				doctorId: appointment.doctorId,
+				date: appointment.appointmentDate,
 				ipAddress: req.ip,
 				userAgent: req.headers['user-agent'],
 			})
