@@ -2,6 +2,7 @@ import { DoctorRepository } from '@/repositories/doctor.repository'
 import { CreateDoctorSchema, UpdateDoctorSchema, DoctorIdSchema } from '@/schemas/doctor.schema'
 import { CryptoService } from '@/services/crypto.service'
 import { auditService } from '@/services/audit.service'
+import { emailService } from '@/services/email.service'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export class DoctorController {
@@ -59,6 +60,20 @@ export class DoctorController {
 					'doctor',
 					req.auditContext
 				)
+			}
+
+			// Envia email de boas-vindas com as credenciais de acesso
+			try {
+				const loginUrl = process.env.FRONTEND_URL || 'https://medvision.com/login'
+				await emailService.sendWelcomeDoctor(doctor.email, {
+					name: doctor.name,
+					email: doctor.email,
+					loginUrl,
+					temporaryPassword: generatedPassword,
+				})
+			} catch (emailError) {
+				console.error('Error sending welcome email:', emailError)
+				// Continua mesmo se o email falhar
 			}
 
 			return res.status(201).send({

@@ -730,6 +730,383 @@ export class PDFGeneratorService {
 			})
 			.text('e Resolução CFM nº 1.821/2007', { align: 'center' })
 	}
+
+	private addDoctorSignature(
+		doc: PDFKit.PDFDocument,
+		doctor: any
+	) {
+		// Adiciona espaço antes da assinatura
+		doc.moveDown(1)
+
+		this.addLine(doc)
+		doc.fontSize(12).font('Helvetica-Bold').text('ASSINATURA ELETRÔNICA', { align: 'center' })
+		doc.moveDown(0.5)
+
+		doc.fontSize(9).font('Helvetica')
+		doc
+			.text(`Documento assinado eletronicamente por:`, { align: 'left' })
+			.text(`${doctor.user.name} - CRM: ${doctor.crm}`)
+			.text(`Especialidade: ${doctor.specialty}`)
+			.text(
+				`Data/Hora: ${new Date().toLocaleString('pt-BR', {
+					timeZone: 'America/Sao_Paulo',
+				})}`
+			)
+			.moveDown(0.5)
+			.fontSize(8)
+			.text('Este documento possui assinatura eletrônica conforme Lei 14.063/2020', {
+				align: 'center',
+			})
+			.text('e Resolução CFM nº 1.821/2007', { align: 'center' })
+	}
+
+	/**
+	 * Gera PDF da triagem em base64
+	 */
+	async generateTriagemPDF(triagem: any): Promise<string> {
+		return new Promise((resolve, reject) => {
+			try {
+				const doc = new PDFDocument({
+					size: 'A4',
+					margins: { top: 50, bottom: 50, left: 50, right: 50 },
+					bufferPages: true,
+				})
+
+				const chunks: Buffer[] = []
+
+				doc.on('data', (chunk) => chunks.push(chunk))
+				doc.on('end', () => {
+					const pdfBuffer = Buffer.concat(chunks)
+					const base64 = pdfBuffer.toString('base64')
+					resolve(base64)
+				})
+				doc.on('error', reject)
+
+				// ========== CABEÇALHO ==========
+				doc
+					.fontSize(20)
+					.font('Helvetica-Bold')
+					.text('FICHA DE TRIAGEM', { align: 'center' })
+
+				doc
+					.fontSize(10)
+					.font('Helvetica')
+					.text(`Documento ID: ${triagem.id}`, { align: 'center' })
+					.text(
+						`Emitido em: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+						{ align: 'center' }
+					)
+
+				doc.moveDown(0.5)
+				this.addLine(doc)
+
+				// ========== DADOS DO PACIENTE ==========
+				doc.fontSize(12).font('Helvetica-Bold').text('DADOS DO PACIENTE')
+				doc.fontSize(10).font('Helvetica')
+				doc
+					.text(`Nome: ${triagem.patient.user.name}`)
+					.text(`CPF: ${this.formatCPF(triagem.patient.user.cpf)}`)
+					.text(`Idade: ${triagem.patient.age} anos`)
+					.text(`Sexo: ${this.formatGender(triagem.patient.gender)}`)
+
+				doc.moveDown(0.5)
+				this.addLine(doc)
+
+				// ========== RESPONSÁVEL PELA TRIAGEM ==========
+				doc.fontSize(12).font('Helvetica-Bold').text('RESPONSÁVEL PELA TRIAGEM')
+				doc.fontSize(10).font('Helvetica')
+				doc
+					.text(`Nome: ${triagem.user.name}`)
+					.text(`Função: ${triagem.user.role === 'admin' ? 'Administrador' : triagem.user.role === 'doctor' ? 'Médico' : 'Outros'}`)
+
+				doc.moveDown(0.5)
+				this.addLine(doc)
+
+				// ========== SINAIS VITAIS ==========
+				doc.fontSize(14).font('Helvetica-Bold').text('SINAIS VITAIS')
+				doc.moveDown(0.3)
+				doc.fontSize(10).font('Helvetica')
+
+				const vitalSigns = [
+					{ label: 'Frequência Cardíaca', value: triagem.frequenciaCardiaca, unit: triagem.frequenciaCardiacaUnit, instr: triagem.frequenciaCardiacaInstr },
+					{ label: 'Frequência Respiratória', value: triagem.frequenciaRespiratoria, unit: triagem.frequenciaRespiratoriaUnit, instr: triagem.frequenciaRespiratoriaInstr },
+					{ label: 'SpO₂', value: triagem.spo2, unit: triagem.spo2Unit, instr: triagem.spo2Instr },
+					{ label: 'Temperatura', value: triagem.temperatura, unit: triagem.temperaturaUnit, instr: triagem.temperaturaInstr },
+					{ label: 'Pressão Arterial Sistólica', value: triagem.pressaoArterialSistolica, unit: triagem.pressaoArterialUnit, instr: triagem.pressaoArterialInstr },
+					{ label: 'Pressão Arterial Diastólica', value: triagem.pressaoArterialDiastolica, unit: triagem.pressaoArterialUnit, instr: triagem.pressaoArterialInstr },
+					{ label: 'PAM', value: triagem.pam, unit: 'mmHg', instr: null },
+					{ label: 'Glicemia', value: triagem.glicemia, unit: triagem.glicemiaUnit, instr: triagem.glicemiaInstr },
+					{ label: 'Pressão Venosa Central', value: triagem.pressaoVenosaCentral, unit: triagem.pressaoVenosaCentralUnit, instr: triagem.pressaoVenosaCentralInstr },
+					{ label: 'Pressão Intracraniana', value: triagem.pressaoIntracraniana, unit: triagem.pressaoIntracranianaUnit, instr: triagem.pressaoIntracranianaInstr },
+				]
+
+				vitalSigns.forEach(({ label, value, unit, instr }) => {
+					if (value !== null && value !== undefined) {
+						let text = `${label}: ${value}`
+						if (unit) text += ` ${unit}`
+						if (instr) text += ` (${instr})`
+						doc.text(text)
+					}
+				})
+
+				doc.moveDown(0.5)
+				this.addLine(doc)
+
+				// ========== MEDIDAS ==========
+				doc.fontSize(14).font('Helvetica-Bold').text('MEDIDAS')
+				doc.moveDown(0.3)
+				doc.fontSize(10).font('Helvetica')
+
+				const measurements = [
+					{ label: 'Capnografia', value: triagem.capnografia, unit: triagem.capnografiaUnit, instr: triagem.capnografiaInstr },
+					{ label: 'Peso', value: triagem.peso, unit: triagem.pesoUnit, instr: triagem.pesoInstr },
+					{ label: 'Altura', value: triagem.altura, unit: triagem.alturaUnit, instr: triagem.alturaInstr },
+					{ label: 'Perímetro Cefálico', value: triagem.perimetroCefalico, unit: triagem.perimetroCefalicoUnit, instr: triagem.perimetroCefalicoInstr },
+				]
+
+				measurements.forEach(({ label, value, unit, instr }) => {
+					if (value !== null && value !== undefined) {
+						let text = `${label}: ${value}`
+						if (unit) text += ` ${unit}`
+						if (instr) text += ` (${instr})`
+						doc.text(text)
+					}
+				})
+
+				// ========== DATA ==========
+				doc.moveDown(1)
+				doc.fontSize(10).font('Helvetica')
+				doc.text(
+					`Data da Triagem: ${new Date(triagem.createdAt).toLocaleString('pt-BR')}`,
+					{ align: 'right' }
+				)
+
+				// ========== RODAPÉ ==========
+				this.addFooter(doc)
+
+				doc.end()
+			} catch (error) {
+				reject(error)
+			}
+		})
+	}
+
+	/**
+	 * Gera PDF combinado com triagem, solicitações e prescrições de uma consulta
+	 */
+	async generateAppointmentCompletePDF(appointment: any): Promise<string> {
+		return new Promise((resolve, reject) => {
+			try {
+				const doc = new PDFDocument({
+					size: 'A4',
+					margins: { top: 50, bottom: 50, left: 50, right: 50 },
+					bufferPages: true,
+				})
+
+				const chunks: Buffer[] = []
+
+				doc.on('data', (chunk) => chunks.push(chunk))
+				doc.on('end', () => {
+					const pdfBuffer = Buffer.concat(chunks)
+					const base64 = pdfBuffer.toString('base64')
+					resolve(base64)
+				})
+				doc.on('error', reject)
+
+				// ========== CABEÇALHO PRINCIPAL ==========
+				doc
+					.fontSize(22)
+					.font('Helvetica-Bold')
+					.text('RELATÓRIO COMPLETO DA CONSULTA', { align: 'center' })
+
+				doc
+					.fontSize(10)
+					.font('Helvetica')
+					.text(`Consulta ID: ${appointment.id}`, { align: 'center' })
+					.text(
+						`Emitido em: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+						{ align: 'center' }
+					)
+
+				doc.moveDown(0.5)
+				this.addLine(doc)
+
+				// ========== DADOS DA CONSULTA ==========
+				doc.fontSize(14).font('Helvetica-Bold').text('DADOS DA CONSULTA')
+				doc.moveDown(0.3)
+				doc.fontSize(10).font('Helvetica')
+				doc
+					.text(`Data/Hora: ${new Date(appointment.appointmentDate).toLocaleString('pt-BR')}`)
+					.text(`Status: ${this.translateStatus(appointment.status)}`)
+				if (appointment.reason) {
+					doc.text(`Motivo: ${appointment.reason}`)
+				}
+				if (appointment.notes) {
+					doc.text(`Observações: ${appointment.notes}`)
+				}
+
+				doc.moveDown(0.5)
+				this.addLine(doc)
+
+				// ========== DADOS DO PACIENTE ==========
+				doc.fontSize(14).font('Helvetica-Bold').text('DADOS DO PACIENTE')
+				doc.moveDown(0.3)
+				doc.fontSize(10).font('Helvetica')
+				doc
+					.text(`Nome: ${appointment.patient.user.name}`)
+					.text(`CPF: ${this.formatCPF(appointment.patient.user.cpf)}`)
+					.text(`Idade: ${appointment.patient.age} anos`)
+					.text(`Sexo: ${this.formatGender(appointment.patient.gender)}`)
+					.text(`Telefone: ${appointment.patient.user.phone}`)
+					.text(`Email: ${appointment.patient.user.email}`)
+
+				doc.moveDown(0.5)
+				this.addLine(doc)
+
+				// ========== DADOS DO MÉDICO ==========
+				doc.fontSize(14).font('Helvetica-Bold').text('MÉDICO RESPONSÁVEL')
+				doc.moveDown(0.3)
+				doc.fontSize(10).font('Helvetica')
+				doc
+					.text(`Nome: ${appointment.doctor.user.name}`)
+					.text(`CRM: ${appointment.doctor.crm}`)
+					.text(`Especialidade: ${appointment.doctor.specialty}`)
+
+				// ========== SOLICITAÇÕES ==========
+				if (appointment.requests && appointment.requests.length > 0) {
+					appointment.requests.forEach((request: any, index: number) => {
+						// Cada solicitação em uma página separada
+						doc.addPage()
+
+						const details = request.details as any
+						let titulo = 'SOLICITAÇÃO MÉDICA'
+						
+						if (details?.tipo) {
+							const tipoLower = details.tipo.toLowerCase()
+							if (tipoLower.includes('exame')) {
+								titulo = 'SOLICITAÇÃO DE EXAME'
+							} else if (tipoLower.includes('consulta')) {
+								titulo = 'SOLICITAÇÃO DE CONSULTA'
+							} else if (tipoLower.includes('cirurgia')) {
+								titulo = 'SOLICITAÇÃO DE CIRURGIA'
+							} else if (tipoLower.includes('internação') || tipoLower.includes('internacao')) {
+								titulo = 'SOLICITAÇÃO DE INTERNAÇÃO'
+							}
+						}
+
+						doc.fontSize(18).font('Helvetica-Bold').text(titulo, { align: 'center' })
+						if (appointment.requests.length > 1) {
+							doc.fontSize(12).font('Helvetica').text(`(${index + 1} de ${appointment.requests.length})`, { align: 'center' })
+						}
+						doc.moveDown(0.5)
+						this.addLine(doc)
+
+						// Detalhes da solicitação
+						doc.fontSize(14).font('Helvetica-Bold').text('DETALHES DA SOLICITAÇÃO')
+						doc.moveDown(0.3)
+						doc.fontSize(10).font('Helvetica')
+
+						if (details?.tipo) {
+							doc.font('Helvetica-Bold').text(`Tipo: ${details.tipo}`)
+							doc.moveDown(0.2)
+						}
+						
+						if (details?.descricao) {
+							doc.font('Helvetica-Bold').text('Descrição:')
+							doc.font('Helvetica').text(details.descricao)
+							doc.moveDown(0.3)
+						}
+						
+						if (details?.observacoes) {
+							doc.font('Helvetica-Bold').text('Observações:')
+							doc.font('Helvetica').text(details.observacoes)
+							doc.moveDown(0.3)
+						}
+
+						doc.moveDown(0.5)
+						doc.fontSize(9).font('Helvetica').text(
+							`Data da Solicitação: ${new Date(request.createdAt).toLocaleString('pt-BR')}`,
+							{ align: 'right' }
+						)
+
+						// Adiciona assinatura eletrônica do médico
+						this.addDoctorSignature(doc, appointment.doctor)
+					})
+				}
+
+				// ========== PRESCRIÇÕES ==========
+				if (appointment.prescriptions && appointment.prescriptions.length > 0) {
+					appointment.prescriptions.forEach((prescription: any, index: number) => {
+						// Cada prescrição em uma página separada
+						doc.addPage()
+
+						doc.fontSize(18).font('Helvetica-Bold').text('PRESCRIÇÃO MÉDICA', { align: 'center' })
+						if (appointment.prescriptions.length > 1) {
+							doc.fontSize(12).font('Helvetica').text(`(${index + 1} de ${appointment.prescriptions.length})`, { align: 'center' })
+						}
+						doc.moveDown(0.5)
+						this.addLine(doc)
+
+						// Medicamentos
+						doc.fontSize(14).font('Helvetica-Bold').text('MEDICAMENTOS PRESCRITOS')
+						doc.moveDown(0.5)
+
+						if (prescription.medicamentos && prescription.medicamentos.length > 0) {
+							prescription.medicamentos.forEach((med: any, medIndex: number) => {
+								doc.fontSize(11).font('Helvetica-Bold').text(`${medIndex + 1}. ${med.nome}`)
+								doc.fontSize(10).font('Helvetica')
+								doc.text(`   Dosagem: ${med.dosagem}`)
+								doc.text(`   Frequência: ${med.frequencia}`)
+								doc.text(`   Duração: ${med.duracao}`)
+								doc.text(`   Via: ${med.via}`)
+								if (med.orientacoes) {
+									doc.text(`   Orientações: ${med.orientacoes}`)
+								}
+								doc.moveDown(0.3)
+							})
+						} else {
+							doc.fontSize(10).font('Helvetica').text('Nenhum medicamento prescrito')
+						}
+
+						// Orientações Gerais
+						if (prescription.orientacoesGerais) {
+							doc.moveDown(0.5)
+							this.addLine(doc)
+							doc.fontSize(12).font('Helvetica-Bold').text('ORIENTAÇÕES GERAIS')
+							doc.fontSize(10).font('Helvetica').text(prescription.orientacoesGerais)
+						}
+
+						doc.moveDown(0.5)
+						doc.fontSize(9).font('Helvetica').text(
+							`Data da Prescrição: ${new Date(prescription.createdAt).toLocaleString('pt-BR')}`,
+							{ align: 'right' }
+						)
+
+						// Adiciona assinatura eletrônica do médico
+						this.addDoctorSignature(doc, appointment.doctor)
+					})
+				}
+
+				// ========== RODAPÉ EM TODAS AS PÁGINAS ==========
+				this.addFooter(doc)
+
+				doc.end()
+			} catch (error) {
+				reject(error)
+			}
+		})
+	}
+
+	private translateStatus(status: string): string {
+		const statuses: Record<string, string> = {
+			scheduled: 'Agendada',
+			inProgress: 'Em Andamento',
+			completed: 'Concluída',
+			cancelled: 'Cancelada',
+			noShow: 'Paciente não compareceu',
+		}
+		return statuses[status] || status
+	}
 }
 
 export const pdfGeneratorService = new PDFGeneratorService()

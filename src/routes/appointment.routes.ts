@@ -7,6 +7,7 @@ export function appointmentRoutes(app: FastifyInstance) {
 	// Rotas específicas primeiro
 	app.post('/cancel-expired', { preHandler: [app.authenticate] }, async (req, res) => controller.cancelExpired(req, res))
 	app.get('/:id/room-token', { preHandler: [app.authenticate] }, async (req, res) => controller.getRoomToken(req, res))
+	app.get('/:id/complete-pdf', { preHandler: [app.authenticate] }, async (req, res) => controller.getAppointmentCompletePDF(req, res))
 	app.post('/:id/feedback/patient', { preHandler: [app.authenticate] }, async (req, res) => controller.addPatientFeedback(req, res))
 	app.post('/:id/feedback/doctor', { preHandler: [app.authenticate] }, async (req, res) => controller.addDoctorFeedback(req, res))
 	

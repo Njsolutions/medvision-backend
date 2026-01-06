@@ -856,4 +856,86 @@ async list(req: FastifyRequest, res: FastifyReply) {
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
+
+	async getAppointmentCompletePDF(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const params = AppointmentIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({
+					error: 'ID inválido',
+					message: 'O ID fornecido não é válido',
+				})
+			}
+
+			const appointment = await this.appointmentRepository.findById(params.data.id)
+
+			if (!appointment) {
+				return res.status(404).send({
+					error: 'Consulta não encontrada',
+					message: 'A consulta especificada não existe no sistema',
+				})
+			}
+
+			// Verifica permissões
+			if (
+				req.user.role !== 'master' &&
+				req.user.role !== 'admin' &&
+				!(req.user.role === 'doctor' && appointment.doctorId === req.user.doctorId) &&
+				!(req.user.role === 'patient' && appointment.patientId === req.user.patientId)
+			) {
+				return res.status(403).send({
+					error: 'Permissão negada',
+					message: 'Você não possui permissão para acessar este relatório',
+				})
+			}
+
+			// Gera o PDF combinado
+			const { pdfGeneratorService } = await import('@/services/pdf-generator.service')
+			const pdfBase64 = await pdfGeneratorService.generateAppointmentCompletePDF(appointment)
+
+			// Log de auditoria
+			await auditService.log(req.user, {
+				action: 'GENERATE_APPOINTMENT_COMPLETE_PDF',
+				description: `Gerou PDF completo da consulta ${appointment.id}`,
+				content: {
+					appointmentId: appointment.id,
+					patientId: appointment.patientId,
+					doctorId: appointment.doctorId,
+					date: appointment.appointmentDate,
+				},
+				ipAddress: req.ip,
+				userAgent: req.headers['user-agent'],
+			})
+
+			// Gera nome do arquivo com padrão: consulta_NomePaciente_DataConsulta.pdf
+			const patientName = appointment.patient.user.name
+				.normalize('NFD')
+				.replace(/[\u0300-\u036f]/g, '') // Remove acentos
+				.replace(/[^a-zA-Z0-9\s]/g, '') // Remove caracteres especiais
+				.replace(/\s+/g, '_') // Substitui espaços por underscore
+				.substring(0, 50) // Limita tamanho
+			
+			const appointmentDate = new Date(appointment.appointmentDate)
+				.toLocaleDateString('pt-BR')
+				.replace(/\//g, '-') // Substitui / por -
+			
+			const filename = `consulta_${patientName}_${appointmentDate}.pdf`
+
+			// Retorna o PDF em base64
+			return res.status(200).send({
+				message: 'PDF gerado com sucesso',
+				data: {
+					pdf: pdfBase64,
+					filename: filename,
+				},
+			})
+		} catch (error) {
+			console.error('Erro ao gerar PDF completo da consulta:', error)
+			return res.status(500).send({
+				error: 'Erro interno do servidor',
+				message: 'Não foi possível gerar o PDF da consulta',
+			})
+		}
+	}
 }
