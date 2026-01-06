@@ -906,6 +906,7 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				patientId: appointment.patientId,
 				doctorId: appointment.doctorId,
 				date: appointment.appointmentDate,
+			},
 				ipAddress: req.ip,
 				userAgent: req.headers['user-agent'],
 			})
