@@ -11,6 +11,7 @@ import {
 } from '@/schemas/appointment.schema'
 import { createDailyService } from '@/services/daily.service'
 import { auditService } from '@/services/audit.service'
+import { ImpactLevel } from '@/types/audit.types'
 import { storageService } from '@/services/storage.service'
 import { cronService } from '@/services/cron.service'
 import { validateDoctorAvailability, formatWeeklyAvailability } from '@/utils/functions/availability'
@@ -895,14 +896,11 @@ async list(req: FastifyRequest, res: FastifyReply) {
 			const pdfBase64 = await pdfGeneratorService.generateAppointmentCompletePDF(appointment)
 
 			// Log de auditoria
-			await auditService.log(req.user, {
-				action: 'GENERATE_APPOINTMENT_COMPLETE_PDF',
-				description: `Gerou PDF completo da consulta ${appointment.id}`,
-				content: {
-					appointmentId: appointment.id,
-					patientId: appointment.patientId,
-					doctorId: appointment.doctorId,
-					date: appointment.appointmentDate,
+		await auditService.log({
+			userId: req.user.userId,
+			action: 'GENERATE_APPOINTMENT_COMPLETE_PDF',
+			description: `Gerou PDF completo da consulta ${appointment.id}`,
+			impactLevel: ImpactLevel.LOW,
 				},
 				ipAddress: req.ip,
 				userAgent: req.headers['user-agent'],
