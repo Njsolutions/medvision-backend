@@ -303,7 +303,7 @@ if (!existingAppointment) {
 		})
 	}
 
-	let newRoomName: string | undefined
+	// let newRoomName removido pois não é mais utilizado
 		// Se a data da consulta mudou, validar disponibilidade e criar nova sala
 		if (data.data.appointmentDate) {
 			const newDate = new Date(data.data.appointmentDate)
@@ -360,7 +360,7 @@ if (!existingAppointment) {
 		if (newDate.getTime() !== oldDate.getTime()) {
 			// Não recriar a sala quando a data muda - apenas manter a sala existente
 			// Isso evita problemas de mismatch de tokens/sala
-			console.log(`Data da consulta alterada de ${oldDate} para ${newDate}, mantendo sala existente: ${existingAppointment.roomName}`)
+			console.log(`Data da consulta alterada de ${oldDate} para ${newDate}, mantendo sala existente: ${existingAppointment.roomName}`);
 		}
 
 		// Verificar se a consulta está sendo finalizada (cancelada, noShow ou completed)
@@ -376,40 +376,10 @@ if (!existingAppointment) {
 			}
 		}
 
+
 		const updatedAppointment = await this.appointmentRepository.update(params.data.id, {
-				...data.data,
-				...(newRoomName && { roomName: newRoomName }),
-			})
-
-			// Gerar novos tokens se a sala foi recriada
-			let patientToken: string | undefined
-			let doctorToken: string | undefined
-
-			if (newRoomName && updatedAppointment.patient && updatedAppointment.doctor) {
-				try {
-					patientToken = await this.dailyService.generateToken(
-						newRoomName,
-						updatedAppointment.patientId,
-						'patient',
-						{
-							userName: updatedAppointment.patient.user.name,
-							expiresIn: 86400,
-						},
-					)
-
-					doctorToken = await this.dailyService.generateToken(
-						newRoomName,
-						updatedAppointment.doctorId,
-						'doctor',
-						{
-							userName: updatedAppointment.doctor.user.name,
-							expiresIn: 86400,
-						},
-					)
-				} catch (error) {
-					console.error('Error generating new tokens:', error)
-				}
-			}
+			...data.data
+		});
 
 			// Registra a atualização da consulta no log de auditoria
 			if (req.user?.id && req.auditContext) {
@@ -442,23 +412,19 @@ if (!existingAppointment) {
 				}
 			}
 
-			return res.status(200).send({
+		return res.status(200).send({
 			message: 'Consulta atualizada com sucesso',
 			data: {
 				appointment: updatedAppointment,
-				...(newRoomName && {
-					roomUrl: `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${newRoomName}`,
-					patientToken,
-					doctorToken,
-				}),
+				roomUrl: `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${updatedAppointment.roomName}`
 			},
-		})
+		});
 	} catch (error) {
 		console.error('Error updating appointment:', error)
 		return res.status(500).send({ 
 			error: 'Erro interno do servidor',
 			message: 'Ocorreu um erro ao atualizar a consulta. Tente novamente.'
-		})
+		});
 	}
 }
 
