@@ -260,127 +260,104 @@ export class AppointmentController {
 
 	async update(req: FastifyRequest, res: FastifyReply) {
 		try {
-			/* if (req.user !== 'master' && req.user?.role !== 'admin' && req.user?.role !== 'doctor') {
-				return res.status(403).send({ error: 'Insufficient permissions to update appointment' })
-			} */
-
-			const params = AppointmentIdSchema.safeParse(req.params)
-
+			const params = AppointmentIdSchema.safeParse(req.params);
 			if (!params.success) {
-			const errorMessages = params.error.issues?.map((err: any) => err.message).join(', ') || 'ID de consulta inválido'
-		return res.status(400).send({ 
-			error: 'ID de consulta inválido',
-			message: errorMessages,
-			details: params.error 
-		})
-	}
-
-	const data = UpdateAppointmentSchema.safeParse(req.body)
-
-	if (!data.success) {
-		const errorMessages = data.error.errors?.map(err => err.message).join(', ') || 'Dados inválidos'
-		return res.status(400).send({ 
-			error: 'Dados inválidos',
-			message: errorMessages,
-			details: data.error 
-		})
-	}
-
-	const existingAppointment = await this.appointmentRepository.findById(params.data.id)
-
-if (!existingAppointment) {
-	return res.status(404).send({ 
-			message: 'A consulta especificada não existe no sistema'
-		})
-	}
-
-	// Validar se a consulta já foi finalizada (não pode mais ser editada)
-	const finalizedStatuses = ['cancelled', 'noShow', 'completed']
-	if (finalizedStatuses.includes(existingAppointment.status)) {
-		return res.status(400).send({ 
-			error: 'Consulta finalizada',
-			message: 'Consultas canceladas, concluídas ou com paciente ausente não podem ser editadas'
-		})
-	}
-
-	// let newRoomName removido pois não é mais utilizado
-		// Se a data da consulta mudou, validar disponibilidade e criar nova sala
-		if (data.data.appointmentDate) {
-			const newDate = new Date(data.data.appointmentDate)
-			const oldDate = new Date(existingAppointment.appointmentDate)
-			
-			// Validar disponibilidade do médico na nova data
-			const doctorExists = await this.appointmentRepository.checkDoctorExists(existingAppointment.doctorId)
-			
-			if (!doctorExists) {
-				return res.status(404).send({ 
-					error: 'Médico não encontrado',
-					message: 'O médico associado à consulta não existe no sistema'
-				})
+				const errorMessages = params.error.issues?.map((err: any) => err.message).join(', ') || 'ID de consulta inválido';
+				return res.status(400).send({
+					error: 'ID de consulta inválido',
+					message: errorMessages,
+					details: params.error
+				});
 			}
-			
-			const newDuration = data.data.durationMinutes || existingAppointment.durationMinutes || 60
-			
-			const availabilityCheck = validateDoctorAvailability(
-				doctorExists.weeklyAvailability,
-				newDate,
-				newDuration
-			)
-
-			if (!availabilityCheck.isAvailable) {
-			const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability)
-			return res.status(400).send({ 
-				error: 'Horário indisponível',
-				message: availabilityCheck.message,
-				doctorName: doctorExists.user.name,
-				doctorSchedule: schedule
-			})
-		}
-			
-			// Verificar conflitos na nova data
-			const conflict = await this.appointmentRepository.checkConflict(
-				existingAppointment.patientId,
-				existingAppointment.doctorId,
-				newDate,
-				newDuration,
-				params.data.id // Excluir a própria consulta
-			)
-			
-			if (conflict) {
-				const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability)
-				const conflictType = conflict.doctorId === existingAppointment.doctorId ? 'médico' : 'paciente'
-				return res.status(409).send({ 
-					error: 'Conflito de horário',
-					message: `Já existe uma consulta agendada para este ${conflictType} no novo horário escolhido.`,
-					doctorName: doctorExists.user.name,
-					doctorSchedule: schedule
-				})
+			const data = UpdateAppointmentSchema.safeParse(req.body);
+			if (!data.success) {
+				const errorMessages = data.error.errors?.map(err => err.message).join(', ') || 'Dados inválidos';
+				return res.status(400).send({
+					error: 'Dados inválidos',
+					message: errorMessages,
+					details: data.error
+				});
 			}
-
-		if (newDate.getTime() !== oldDate.getTime()) {
-			// Não recriar a sala quando a data muda - apenas manter a sala existente
-			// Isso evita problemas de mismatch de tokens/sala
-			console.log(`Data da consulta alterada de ${oldDate} para ${newDate}, mantendo sala existente: ${existingAppointment.roomName}`);
-		}
-
-		// Verificar se a consulta está sendo finalizada (cancelada, noShow ou completed)
-		// Se sim, deletar a sala
-		if (data.data.status && ['cancelled', 'noShow', 'completed'].includes(data.data.status)) {
-			if (existingAppointment.roomName) {
-				try {
-					await this.dailyService.deleteRoom(existingAppointment.roomName)
-					console.log(`Room ${existingAppointment.roomName} deleted for appointment ${params.data.id}`)
-				} catch (error) {
-					console.error('Error deleting room on appointment finalization:', error)
+			const existingAppointment = await this.appointmentRepository.findById(params.data.id);
+			if (!existingAppointment) {
+				return res.status(404).send({
+					message: 'A consulta especificada não existe no sistema'
+				});
+			}
+			// Validar se a consulta já foi finalizada (não pode mais ser editada)
+			const finalizedStatuses = ['cancelled', 'noShow', 'completed'];
+			if (finalizedStatuses.includes(existingAppointment.status)) {
+				return res.status(400).send({
+					error: 'Consulta finalizada',
+					message: 'Consultas canceladas, concluídas ou com paciente ausente não podem ser editadas'
+				});
+			}
+			// Se a data da consulta mudou, validar disponibilidade
+			if (data.data.appointmentDate) {
+				const newDate = new Date(data.data.appointmentDate);
+				const oldDate = new Date(existingAppointment.appointmentDate);
+				// Validar disponibilidade do médico na nova data
+				const doctorExists = await this.appointmentRepository.checkDoctorExists(existingAppointment.doctorId);
+				if (!doctorExists) {
+					return res.status(404).send({
+						error: 'Médico não encontrado',
+						message: 'O médico associado à consulta não existe no sistema'
+					});
+				}
+				const newDuration = data.data.durationMinutes || existingAppointment.durationMinutes || 60;
+				const availabilityCheck = validateDoctorAvailability(
+					doctorExists.weeklyAvailability,
+					newDate,
+					newDuration
+				);
+				if (!availabilityCheck.isAvailable) {
+					const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability);
+					return res.status(400).send({
+						error: 'Horário indisponível',
+						message: availabilityCheck.message,
+						doctorName: doctorExists.user.name,
+						doctorSchedule: schedule
+					});
+				}
+				// Verificar conflitos na nova data
+				const conflict = await this.appointmentRepository.checkConflict(
+					existingAppointment.patientId,
+					existingAppointment.doctorId,
+					newDate,
+					newDuration,
+					params.data.id // Excluir a própria consulta
+				);
+				if (conflict) {
+					const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability);
+					const conflictType = conflict.doctorId === existingAppointment.doctorId ? 'médico' : 'paciente';
+					return res.status(409).send({
+						error: 'Conflito de horário',
+						message: `Já existe uma consulta agendada para este ${conflictType} no novo horário escolhido.`,
+						doctorName: doctorExists.user.name,
+						doctorSchedule: schedule
+					});
+				}
+				if (newDate.getTime() !== oldDate.getTime()) {
+					// Não recriar a sala quando a data muda - apenas manter a sala existente
+					// Isso evita problemas de mismatch de tokens/sala
+					console.log(`Data da consulta alterada de ${oldDate} para ${newDate}, mantendo sala existente: ${existingAppointment.roomName}`);
 				}
 			}
-		}
-
-
-		const updatedAppointment = await this.appointmentRepository.update(params.data.id, {
-			...data.data
-		});
-
+			// Verificar se a consulta está sendo finalizada (cancelada, noShow ou completed)
+			// Se sim, deletar a sala
+			if (data.data.status && ['cancelled', 'noShow', 'completed'].includes(data.data.status)) {
+				if (existingAppointment.roomName) {
+					try {
+						await this.dailyService.deleteRoom(existingAppointment.roomName);
+						console.log(`Room ${existingAppointment.roomName} deleted for appointment ${params.data.id}`);
+					} catch (error) {
+						console.error('Error deleting room on appointment finalization:', error);
+					}
+				}
+			}
+			const updatedAppointment = await this.appointmentRepository.update(params.data.id, {
+				...data.data
+			});
 			// Registra a atualização da consulta no log de auditoria
 			if (req.user?.id && req.auditContext) {
 				// Verificar qual tipo de atualização foi feita
@@ -389,44 +366,43 @@ if (!existingAppointment) {
 						req.user.id,
 						params.data.id,
 						req.auditContext
-					)
+					);
 				} else if (data.data.status === 'completed') {
 					await auditService.logAppointmentComplete(
 						req.user.id,
 						params.data.id,
 						req.auditContext
-					)
+					);
 				} else if (data.data.status === 'noShow') {
 					await auditService.logAppointmentNoShow(
 						req.user.id,
 						params.data.id,
 						req.auditContext
-					)
+					);
 				} else {
 					await auditService.logAppointmentUpdate(
 						req.user.id,
 						params.data.id,
 						data.data,
 						req.auditContext
-					)
+					);
 				}
 			}
-
-		return res.status(200).send({
-			message: 'Consulta atualizada com sucesso',
-			data: {
-				appointment: updatedAppointment,
-				roomUrl: `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${updatedAppointment.roomName}`
-			},
-		});
-	} catch (error) {
-		console.error('Error updating appointment:', error)
-		return res.status(500).send({ 
-			error: 'Erro interno do servidor',
-			message: 'Ocorreu um erro ao atualizar a consulta. Tente novamente.'
-		});
+			return res.status(200).send({
+				message: 'Consulta atualizada com sucesso',
+				data: {
+					appointment: updatedAppointment,
+					roomUrl: `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${updatedAppointment.roomName}`
+				},
+			});
+		} catch (error) {
+			console.error('Error updating appointment:', error);
+			return res.status(500).send({
+				error: 'Erro interno do servidor',
+				message: 'Ocorreu um erro ao atualizar a consulta. Tente novamente.'
+			});
+		}
 	}
-}
 
 async list(req: FastifyRequest, res: FastifyReply) {
 	try {
