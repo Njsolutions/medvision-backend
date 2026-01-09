@@ -358,28 +358,9 @@ if (!existingAppointment) {
 			}
 
 		if (newDate.getTime() !== oldDate.getTime()) {
-			// Deletar sala antiga se existir
-			if (existingAppointment.roomName) {
-					try {
-						await this.dailyService.deleteRoom(existingAppointment.roomName)
-					} catch (error) {
-						console.error('Error deleting old room:', error)
-					}
-				}
-
-				// Criar nova sala
-				const roomName = `appointment-${Date.now()}-${existingAppointment.patientId.slice(0, 8)}`
-				try {
-					const dailyRoom = await this.dailyService.createRoom(roomName, params.data.id)
-					newRoomName = dailyRoom.roomName
-				} catch (error) {
-					console.error('Error creating new Daily.co room:', error)
-					return res.status(500).send({ 
-						error: 'Erro ao criar sala de vídeo',
-						message: 'Não foi possível criar uma nova sala de vídeo para a consulta'
-					})
-				}
-			}
+			// Não recriar a sala quando a data muda - apenas manter a sala existente
+			// Isso evita problemas de mismatch de tokens/sala
+			console.log(`Data da consulta alterada de ${oldDate} para ${newDate}, mantendo sala existente: ${existingAppointment.roomName}`)
 		}
 
 		// Verificar se a consulta está sendo finalizada (cancelada, noShow ou completed)
