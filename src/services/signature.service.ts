@@ -4,8 +4,8 @@ export interface SignatureData {
 	documentHash: string
 	signerId: string
 	signerName: string
-	signerCRM?: string
-	timestamp: Date
+	signerCRM?: string | null
+	timestamp?: Date
 	ipAddress?: string
 	userAgent?: string
 	documentType: string
@@ -17,6 +17,14 @@ export interface SignatureResult {
 	documentHash: string
 	timestamp: Date
 	certificateId: string
+}
+
+interface CertificateSummary {
+	certificateId: string
+	signedBy: string
+	signedAt: Date
+	documentHash: string
+	crm?: string | null
 }
 
 export class SignatureService {
@@ -48,13 +56,15 @@ export class SignatureService {
 	 * Cria uma assinatura eletrônica do documento
 	 */
 	signDocument(data: SignatureData): SignatureResult {
+		const timestamp = data.timestamp ?? new Date()
+
 		// Cria string com todos os dados relevantes
 		const signaturePayload = JSON.stringify({
 			documentHash: data.documentHash,
 			signerId: data.signerId,
 			signerName: data.signerName,
 			signerCRM: data.signerCRM,
-			timestamp: data.timestamp.toISOString(),
+			timestamp: timestamp.toISOString(),
 			ipAddress: data.ipAddress,
 			documentType: data.documentType,
 			documentId: data.documentId,
@@ -72,7 +82,7 @@ export class SignatureService {
 		return {
 			signature,
 			documentHash: data.documentHash,
-			timestamp: data.timestamp,
+			timestamp,
 			certificateId,
 		}
 	}
@@ -81,12 +91,14 @@ export class SignatureService {
 	 * Verifica se a assinatura é válida
 	 */
 	verifySignature(signature: string, data: SignatureData): boolean {
+		const timestamp = data.timestamp ?? new Date()
+
 		const signaturePayload = JSON.stringify({
 			documentHash: data.documentHash,
 			signerId: data.signerId,
 			signerName: data.signerName,
 			signerCRM: data.signerCRM,
-			timestamp: data.timestamp.toISOString(),
+			timestamp: timestamp.toISOString(),
 			ipAddress: data.ipAddress,
 			documentType: data.documentType,
 			documentId: data.documentId,
@@ -120,7 +132,21 @@ export class SignatureService {
 	/**
 	 * Gera certificado de autenticidade
 	 */
-	generateCertificate(data: SignatureData, signatureResult: SignatureResult): string {
+	generateCertificate(data: SignatureData, signatureResult: SignatureResult): string
+	generateCertificate(data: CertificateSummary): string
+	generateCertificate(data: any, signatureResult?: SignatureResult): string {
+		const certificateId = signatureResult?.certificateId ?? ('certificateId' in data ? data.certificateId : '')
+		const documentHash = signatureResult?.documentHash ?? data.documentHash
+		const signerName = 'signerName' in data ? data.signerName : data.signedBy
+		const signerCRM = 'signerCRM' in data ? data.signerCRM : ('crm' in data ? data.crm : undefined)
+		const signerId = 'signerId' in data ? data.signerId : ''
+		const timestamp = signatureResult?.timestamp ?? ('signedAt' in data ? data.signedAt : (data.timestamp ?? new Date()))
+		const documentType = 'documentType' in data ? data.documentType : 'document'
+		const documentId = 'documentId' in data ? data.documentId : ''
+		const signature = signatureResult?.signature ?? ''
+		const ipAddress = 'ipAddress' in data ? data.ipAddress : undefined
+		const userAgent = 'userAgent' in data ? data.userAgent : undefined
+
 		const documentTypes: Record<string, string> = {
 			anamnese: 'Anamnese Médica',
 			prescription: 'Prescrição Médica',
@@ -134,27 +160,27 @@ export class SignatureService {
 ╚═══════════════════════════════════════════════════════════════╝
 
 IDENTIFICAÇÃO DO CERTIFICADO
-  ID: ${signatureResult.certificateId}
+  ID: ${certificateId}
 
 DOCUMENTO ASSINADO
-  Tipo: ${documentTypes[data.documentType] || data.documentType}
-  ID: ${data.documentId}
-  Hash SHA-256: ${signatureResult.documentHash}
+  Tipo: ${documentTypes[documentType] || documentType}
+  ID: ${documentId}
+  Hash SHA-256: ${documentHash}
 
 ASSINANTE
-  Nome: ${data.signerName}
-  ${data.signerCRM ? `CRM: ${data.signerCRM}` : ''}
-  ID Interno: ${data.signerId}
+  Nome: ${signerName}
+  ${signerCRM ? `CRM: ${signerCRM}` : ''}
+  ID Interno: ${signerId}
 
 DATA E HORA DA ASSINATURA
-  ${signatureResult.timestamp.toLocaleString('pt-BR', { 
+  ${timestamp.toLocaleString('pt-BR', { 
 		timeZone: 'America/Sao_Paulo',
 		dateStyle: 'full',
 		timeStyle: 'long'
 	})}
 
 ASSINATURA DIGITAL (HMAC-SHA256)
-  ${signatureResult.signature}
+  ${signature}
 
 INFORMAÇÕES DE AUDITORIA
   Endereço IP: ${data.ipAddress || 'Não registrado'}
@@ -171,7 +197,7 @@ VALIDADE JURÍDICA: Este documento possui validade jurídica como
 assinatura eletrônica simples (artigo 4º da Lei 14.063/2020).
 
 Para verificar a autenticidade deste documento, acesse:
-${process.env.APP_URL || 'https://seu-sistema.com'}/api/signatures/verify/${signatureResult.certificateId}
+${process.env.APP_URL || 'https://seu-sistema.com'}/api/signatures/verify/${certificateId}
 
 ═══════════════════════════════════════════════════════════════
 		`.trim()

@@ -63,7 +63,7 @@ interface SignatureData {
 	signedBy: string
 	signedAt: Date
 	documentHash: string
-	crm?: string
+	crm?: string | null
 }
 
 export class PDFGeneratorService {

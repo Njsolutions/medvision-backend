@@ -7,17 +7,28 @@ interface CreateSignatureData {
 	documentHash: string
 	signerId: string
 	signerName: string
-	signerCRM?: string
-	signerRole: string
-	signature: string
+	signerCRM?: string | null
+	signerRole?: string
+	signature: string | { signature: string }
 	ipAddress?: string
 	userAgent?: string
-	signedAt: Date
+	signedAt?: Date
 }
 
 export class SignatureRepository {
 	async create(data: CreateSignatureData) {
-		return prisma.signature.create({ data })
+		const signature = typeof data.signature === 'string'
+			? data.signature
+			: data.signature.signature
+
+		return prisma.signature.create({
+			data: {
+				...data,
+				signerRole: data.signerRole ?? 'doctor',
+				signature,
+				signedAt: data.signedAt ?? new Date(),
+			},
+		})
 	}
 
 	async findByCertificateId(certificateId: string) {

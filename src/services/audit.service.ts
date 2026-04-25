@@ -1,4 +1,4 @@
-import { auditLogRepository } from '../repositories/auditlog.repository'
+import { auditLogRepository } from '@/modules/auditlog/auditlog.repository'
 import type { AuditLogData, AuditContext } from '../types/audit.types'
 import { ImpactLevel } from '../types/audit.types'
 
@@ -13,6 +13,42 @@ export class AuditService {
       // Não deve falhar a operação principal se o log falhar
       console.error('Erro ao registrar log de auditoria:', error)
     }
+  }
+
+  async logAction(
+    userId: string,
+    action: string,
+    resource: string,
+    resourceId: string,
+    content: Record<string, unknown> | null,
+    context: AuditContext
+  ): Promise<void> {
+    await this.log({
+      userId,
+      action,
+      description: `${action} em ${resource} ${resourceId}`,
+      content: content ?? { resource, resourceId },
+      impactLevel: ImpactLevel.MEDIUM,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    })
+  }
+
+  async logPrescriptionPDFGenerated(
+    userId: string,
+    prescriptionId: string,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<void> {
+    await this.log({
+      userId,
+      action: 'PRESCRIPTION_PDF_GENERATED',
+      description: 'Gerou PDF de prescrição médica',
+      content: { prescriptionId },
+      impactLevel: ImpactLevel.LOW,
+      ipAddress,
+      userAgent,
+    })
   }
 
   /**

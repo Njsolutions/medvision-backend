@@ -1,7 +1,6 @@
 interface RateLimitConfig {
-	windowMs: number // Janela de tempo em ms
-	maxRequests: number // Máximo de requisições permitidas
-	message?: string
+	windowMs: number
+	maxRequests: number
 }
 
 interface RequestLog {
@@ -16,7 +15,6 @@ export function createRateLimitService() {
 		const now = Date.now()
 		for (const [key, log] of store.entries()) {
 			if (now - log.timestamp > 3600000) {
-				// 1 hora
 				store.delete(key)
 			}
 		}
@@ -27,31 +25,13 @@ export function createRateLimitService() {
 		const log = store.get(identifier)
 
 		if (!log || now - log.timestamp > config.windowMs) {
-			// Nova janela de tempo
 			store.set(identifier, { timestamp: now, count: 1 })
 			return false
 		}
 
 		log.count++
 
-		if (log.count > config.maxRequests) {
-			return true
-		}
-
-		return false
-	}
-
-	function getStatus(identifier: string, windowMs: number): { remaining: number; resetAt: number } {
-		const log = store.get(identifier)
-
-		if (!log) {
-			return { remaining: Infinity, resetAt: Date.now() + windowMs }
-		}
-
-		const remaining = Math.max(0, log.count)
-		const resetAt = log.timestamp + windowMs
-
-		return { remaining, resetAt }
+		return log.count > config.maxRequests
 	}
 
 	function reset(identifier: string): void {
@@ -60,36 +40,36 @@ export function createRateLimitService() {
 
 	function checkGeneralLimit(identifier: string): boolean {
 		return isLimited(identifier, {
-			windowMs: 15 * 60 * 1000, // 15 minutos
+			windowMs: 15 * 60 * 1000,
 			maxRequests: 100,
 		})
 	}
 
 	function checkLoginLimit(identifier: string): boolean {
 		return isLimited(identifier, {
-			windowMs: 15 * 60 * 1000, // 15 minutos
-			maxRequests: 5, // 5 tentativas
+			windowMs: 15 * 60 * 1000,
+			maxRequests: 5,
 		})
 	}
 
 	function check2FALimit(identifier: string): boolean {
 		return isLimited(identifier, {
-			windowMs: 10 * 60 * 1000, // 10 minutos
-			maxRequests: 3, // 3 tentativas
+			windowMs: 10 * 60 * 1000,
+			maxRequests: 3,
 		})
 	}
 
 	function checkVerificationLimit(identifier: string): boolean {
 		return isLimited(identifier, {
-			windowMs: 60 * 60 * 1000, // 1 hora
-			maxRequests: 3, // 3 tentativas
+			windowMs: 60 * 60 * 1000,
+			maxRequests: 3,
 		})
 	}
 
 	function checkPasswordResetLimit(identifier: string): boolean {
 		return isLimited(identifier, {
-			windowMs: 60 * 60 * 1000, // 1 hora
-			maxRequests: 3, // 3 tentativas
+			windowMs: 60 * 60 * 1000,
+			maxRequests: 3,
 		})
 	}
 
@@ -99,7 +79,6 @@ export function createRateLimitService() {
 
 	return {
 		isLimited,
-		getStatus,
 		reset,
 		checkGeneralLimit,
 		checkLoginLimit,
@@ -112,3 +91,4 @@ export function createRateLimitService() {
 }
 
 export type RateLimitService = ReturnType<typeof createRateLimitService>
+export const rateLimitService = createRateLimitService()

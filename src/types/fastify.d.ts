@@ -1,10 +1,16 @@
 import '@fastify/jwt'
 import type { AuditContext } from './audit.types'
+import type { UserRole } from './auth.types'
 
 export interface AuthUser {
 	id: string
+	sub?: string
+	userId: string
 	email: string
-	role: 'master' | 'admin' | 'doctor' | 'patient'
+	role: UserRole
+	name: string
+	doctorId?: string
+	patientId?: string
 }
 
 declare module 'fastify' {

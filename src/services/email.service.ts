@@ -47,7 +47,7 @@ class EmailService {
 				html: options.html,
 				cc: options.cc,
 				bcc: options.bcc,
-				reply_to: options.replyTo,
+				replyTo: options.replyTo,
 				attachments: options.attachments,
 				tags: options.tags,
 			})

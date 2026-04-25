@@ -1,9 +1,11 @@
-export enum ImpactLevel {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical'
-}
+export const ImpactLevel = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
+} as const
+
+export type ImpactLevel = (typeof ImpactLevel)[keyof typeof ImpactLevel]
 
 export interface AuditLogData {
   userId: string
