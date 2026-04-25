@@ -6,7 +6,8 @@
 	"scripts": {
 		"dev": "tsx watch --env-file=.env src/server.ts",
 		"build": "tsc",
-		"start": "node --import tsx src/server.ts",
+		"start": "node --env-file=.env --require ./scripts/register-dist-paths.cjs dist/server.js",
+		"test": "tsx --test \"tests/**/*.test.ts\"",
 		"format": "biome format --write",
 		"db:generate": "pnpm exec prisma generate",
 		"db:migrate": "pnpm exec prisma migrate deploy",
@@ -43,6 +44,7 @@
 		"@prisma/client": "^6.19.0",
 		"@prisma/internals": "^6.19.0",
 		"@scalar/fastify-api-reference": "^1.39.3",
+		"axios": "^1.13.2",
 		"bcrypt": "^6.0.0",
 		"dotenv": "^17.2.3",
 		"fastify": "^5.6.1",

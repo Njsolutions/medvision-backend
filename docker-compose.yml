@@ -30,8 +30,10 @@ services:
       PORT: ${PORT:-3333}
       JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECRET: ${COOKIE_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS}
       NODE_ENV: ${NODE_ENV:-production}
       DAILY_CO_API_KEY: ${DAILY_CO_API_KEY}
+      DAILY_DOMAIN: ${DAILY_DOMAIN}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: ${EMAIL_FROM:-MedVision <noreply@medvision.com>}
       R2_ENDPOINT: ${R2_ENDPOINT}
