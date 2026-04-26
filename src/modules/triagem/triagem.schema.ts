@@ -4,6 +4,10 @@ export const CreateTriagemSchema = z.object({
 	patientId: z.string().uuid('Invalid patient ID'),
 	appointmentId: z.string().uuid('Invalid appointment ID').optional(),
 
+	queixaPrincipal: z.string().optional(),
+	duracaoQueixa: z.string().optional(),
+	examesAnteriores: z.string().optional(),
+
 	// Sinais Vitais
 	frequenciaCardiaca: z.number().optional(),
 	frequenciaCardiacaUnit: z.string().optional(),
@@ -21,8 +25,8 @@ export const CreateTriagemSchema = z.object({
 	temperaturaUnit: z.string().optional(),
 	temperaturaInstr: z.string().optional(),
 
-	pressaoArterialSistolica: z.number().optional(),
-	pressaoArterialDiastolica: z.number().optional(),
+	pressaoArterialSistolica: z.number(),
+	pressaoArterialDiastolica: z.number(),
 	pressaoArterialUnit: z.string().optional(),
 	pressaoArterialInstr: z.string().optional(),
 
@@ -45,11 +49,11 @@ export const CreateTriagemSchema = z.object({
 	capnografiaUnit: z.string().optional(),
 	capnografiaInstr: z.string().optional(),
 
-	peso: z.number().optional(),
+	peso: z.number(),
 	pesoUnit: z.string().optional(),
 	pesoInstr: z.string().optional(),
 
-	altura: z.number().optional(),
+	altura: z.number(),
 	alturaUnit: z.string().optional(),
 	alturaInstr: z.string().optional(),
 
@@ -60,6 +64,10 @@ export const CreateTriagemSchema = z.object({
 
 export const UpdateTriagemSchema = z.object({
 	appointmentId: z.string().uuid('Invalid appointment ID').optional(),
+
+	queixaPrincipal: z.string().optional(),
+	duracaoQueixa: z.string().optional(),
+	examesAnteriores: z.string().optional(),
 
 	// Sinais Vitais
 	frequenciaCardiaca: z.number().optional(),

@@ -20,6 +20,15 @@ export class UserRepository {
 		})
 	}
 
+	async findPatientByCPF(cpf: string) {
+		return db.user.findUnique({
+			where: { cpf },
+			include: {
+				patient: true,
+			},
+		})
+	}
+
 	async createUser(userData: RegisterUserInput) {
 		return db.user.create({
 			data: {

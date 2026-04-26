@@ -7,6 +7,7 @@ export const createAnamneseSchema = z.object({
   
   // Queixa Principal e HDA
   queixaPrincipal: z.string().optional(),
+  anamneseRetorno: z.string().optional(),
   hdaInicio: z.string().optional(),
   hdaDuracao: z.string().optional(),
   hdaIntensidade: z.string().optional(),
@@ -34,6 +35,7 @@ export const createAnamneseSchema = z.object({
   alergias: z.string().optional(),
   historicoFamiliar: z.string().optional(),
   habitosVida: z.string().optional(),
+  examesAnteriores: z.string().optional(),
   
   // Exame Físico e Diagnóstico
   revisaoSistemas: z.string().optional(),

@@ -15,6 +15,7 @@ import { ImpactLevel } from '@/types/audit.types'
 import { storageService } from '@/services/storage.service'
 import { cronService } from '@/services/cron.service'
 import { pdfGeneratorService } from '@/services/pdf-generator.service'
+import { realtimeService } from '@/services/realtime.service'
 import { validateDoctorAvailability, formatWeeklyAvailability } from '@/utils/functions/availability'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
@@ -240,6 +241,17 @@ export class AppointmentController {
 				},
 			}
 
+			realtimeService.broadcast({
+				type: 'appointment.created',
+				data: {
+					appointmentId: appointment.id,
+					patientId: appointment.patientId,
+					doctorId: appointment.doctorId,
+					status: appointment.status,
+					appointmentDate: appointment.appointmentDate,
+				},
+			})
+
 			return res.status(201).send({
 				message: 'Consulta criada com sucesso',
 				data: {
@@ -362,6 +374,16 @@ export class AppointmentController {
 			// Registra a atualização da consulta no log de auditoria
 			if (req.user?.id && req.auditContext) {
 				// Verificar qual tipo de atualização foi feita
+				realtimeService.broadcast({
+					type: 'appointment.updated',
+					data: {
+						appointmentId: updatedAppointment.id,
+						patientId: updatedAppointment.patientId,
+						doctorId: updatedAppointment.doctorId,
+						status: updatedAppointment.status,
+						appointmentDate: updatedAppointment.appointmentDate,
+					},
+				})
 				if (data.data.status === 'cancelled') {
 					await auditService.logAppointmentCancel(
 						req.user.id,
@@ -452,12 +474,25 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				filters.doctorId = query.data.doctorId
 			}
 
-			if (query.data.startDate) {
-				filters.startDate = new Date(query.data.startDate)
+			const startDateInput = query.data.startDate || query.data.dateFrom
+			const endDateInput = query.data.endDate || query.data.dateTo
+
+			if (startDateInput) {
+				const startDate = new Date(startDateInput)
+				if (Number.isNaN(startDate.getTime())) {
+					return res.status(400).send({ error: 'Data inicial inválida' })
+				}
+				startDate.setHours(0, 0, 0, 0)
+				filters.startDate = startDate
 			}
 
-			if (query.data.endDate) {
-				filters.endDate = new Date(query.data.endDate)
+			if (endDateInput) {
+				const endDate = new Date(endDateInput)
+				if (Number.isNaN(endDate.getTime())) {
+					return res.status(400).send({ error: 'Data final inválida' })
+				}
+				endDate.setHours(23, 59, 59, 999)
+				filters.endDate = endDate
 			}
 
 			const result = await this.appointmentRepository.findAll(filters)

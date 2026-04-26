@@ -2,6 +2,20 @@ import { db } from '@/lib/prisma'
 import type { CreateUtiInput, UpdateUtiInput } from '@/modules/uti/uti.schema'
 
 export class UtiRepository {
+	private async getNextBedNumber() {
+		const lastBed = await db.uti.findFirst({
+			orderBy: {
+				bedNumber: 'desc',
+			},
+			select: {
+				bedNumber: true,
+			},
+		})
+
+		const lastNumber = Number.parseInt(lastBed?.bedNumber || '100', 10)
+		return String(Number.isNaN(lastNumber) ? 101 : lastNumber + 1)
+	}
+
 	async findById(id: string) {
 		return db.uti.findUnique({
 			where: { id },
@@ -53,10 +67,13 @@ export class UtiRepository {
 	}
 
 	async create(data: CreateUtiInput & { roomLink?: string | null }) {
+		const bedNumber = await this.getNextBedNumber()
+
 		return db.uti.create({
 			data: {
+				bedNumber,
 				patientId: data.patientId || null,
-				status: data.patientId ? 'occupied' : 'available', // Auto-determina status baseado no paciente
+				status: data.patientId ? 'occupied' : data.status, // Auto-determina status baseado no paciente
 				roomLink: data.roomLink || null,
 			},
 			include: {

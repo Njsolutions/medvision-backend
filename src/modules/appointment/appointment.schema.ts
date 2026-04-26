@@ -48,8 +48,10 @@ export const ListAppointmentsSchema = z.object({
 	status: z.enum(['scheduled', 'inProgress', 'completed', 'cancelled', 'noShow']).optional(),
 	patientId: z.string().uuid('ID do paciente inválido').optional(),
 	doctorId: z.string().uuid('ID do médico inválido').optional(),
-	startDate: z.string().datetime('Data inicial inválida').optional(),
-	endDate: z.string().datetime('Data final inválida').optional(),
+	startDate: z.string().optional(),
+	endDate: z.string().optional(),
+	dateFrom: z.string().optional(),
+	dateTo: z.string().optional(),
 	page: z.coerce.number().int().min(1).default(1),
 	limit: z.coerce.number().int().min(1).max(100).default(10),
 })

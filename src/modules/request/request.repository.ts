@@ -17,7 +17,7 @@ export class RequestRepository {
 						patientId,
 						doctorId,
 						appointmentId: appointmentId || null,
-						type: 'other', // Tipo genérico, pode ser ajustado conforme necessário
+						type: solicitacao.tipo,
 						status: 'pending',
 						details: {
 							tipo: solicitacao.tipo,

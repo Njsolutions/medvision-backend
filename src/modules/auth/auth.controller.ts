@@ -1,5 +1,6 @@
 import { UserRepository } from '@/modules/auth/user.repository'
 import {
+	PatientSimpleSignInSchema,
 	RegisterUserSchema,
 	RequestPasswordResetSchema,
 	ResetPasswordSchema,
@@ -120,6 +121,60 @@ export class AuthController {
 			})
 		} catch (error) {
 			console.error('Error during user sign-in:', error)
+			return res.status(500).send({ error: 'Erro interno do servidor' })
+		}
+	}
+
+	async patientSimpleSignIn(req: FastifyRequest, res: FastifyReply) {
+		try {
+			const loginIdentifier = `${req.ip}:${(req.body as { cpf?: string } | undefined)?.cpf ?? 'unknown'}`
+			if (rateLimitService.checkLoginLimit(loginIdentifier)) {
+				return res.status(429).send({ error: 'Muitas tentativas de login. Tente novamente mais tarde.' })
+			}
+
+			const data = PatientSimpleSignInSchema.safeParse(req.body)
+
+			if (!data.success) {
+				return res.status(400).send({ error: 'Dados da requisição inválidos', details: data.error })
+			}
+
+			const existingUser = await this.userRepository.findPatientByCPF(data.data.cpf)
+
+			if (!existingUser || existingUser.role !== 'patient' || !existingUser.patient || !existingUser.patient.birthDate) {
+				return res.status(401).send({ error: 'CPF ou data de nascimento inválidos' })
+			}
+
+			const patientBirthDate = existingUser.patient.birthDate.toISOString().slice(0, 10)
+			if (patientBirthDate !== data.data.birthDate) {
+				return res.status(401).send({ error: 'CPF ou data de nascimento inválidos' })
+			}
+
+			const { token, refreshToken, expiresIn } = this.jwtService.generateToken(
+				existingUser.id,
+				existingUser.role,
+				existingUser.name,
+				{
+					userId: existingUser.id,
+					patientId: existingUser.patient.id,
+					email: existingUser.email,
+				},
+			)
+
+			if (req.auditContext) {
+				await auditService.logLogin(existingUser.id, req.auditContext)
+			}
+
+			return res.status(200).send({
+				message: 'Login do paciente realizado com sucesso',
+				data: {
+					token,
+					refreshToken,
+					expiresIn,
+					patientId: existingUser.patient.id,
+				},
+			})
+		} catch (error) {
+			console.error('Error during patient simple sign-in:', error)
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}

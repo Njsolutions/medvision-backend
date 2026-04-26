@@ -12,6 +12,10 @@ export function requestRoutes(app: FastifyInstance) {
 	app.get('/doctor/:doctorId', { preHandler: [app.authenticate] }, async (req, res) => 
 		controller.findByDoctorId(req, res)
 	)
+
+	app.get('/options', { preHandler: [app.authenticate] }, async (req, res) =>
+		controller.options(req, res)
+	)
 	
 	// Rotas genéricas por último
 	app.get('/', { preHandler: [app.authenticate] }, async (req, res) => 

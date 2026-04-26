@@ -3,6 +3,7 @@ import { fastify } from 'fastify'
 import { fastifySwagger } from '@fastify/swagger'
 import { fastifyCors } from '@fastify/cors'
 import fastifyMultipart from '@fastify/multipart'
+import fastifyWebsocket from '@fastify/websocket'
 import ScalarApiReference from '@scalar/fastify-api-reference'
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
@@ -41,6 +42,8 @@ server.register(fastifyMultipart, {
 		fileSize: 50 * 1024 * 1024, // 50MB
 	},
 })
+
+server.register(fastifyWebsocket)
 
 server.register(fastifyJwt, {
 	secret: jwtSecret,

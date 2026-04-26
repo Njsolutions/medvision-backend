@@ -42,8 +42,8 @@ export function createDailyService(): DailyService {
 					privacy: 'private',
 					properties: {
 						enable_chat: true,
-						enable_screenshare: true,
-						enable_recording: 'cloud',
+						enable_screenshare: false,
+						enable_recording: 'off',
 						enable_knocking: false,
 						enable_network_ui: false,
 						enable_prejoin_ui: false, // Desabilitar prejoin para evitar problemas com token
@@ -139,7 +139,7 @@ export function createDailyService(): DailyService {
 
 			// Adiciona permissões válidas para tokens
 			if (isOwner) {
-				tokenProperties.enable_screenshare = true
+				tokenProperties.enable_screenshare = false
 				tokenProperties.start_video_off = false
 				tokenProperties.start_audio_off = false
 			}

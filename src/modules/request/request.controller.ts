@@ -3,6 +3,7 @@ import { PatientRepository } from '@/modules/patient/patient.repository'
 import { DoctorRepository } from '@/modules/doctor/doctor.repository'
 import { 
 	CreateRequestsSchema, 
+	REQUEST_TYPE_OPTIONS,
 	UpdateRequestSchema, 
 	RequestIdSchema, 
 	ListRequestsSchema 
@@ -11,6 +12,7 @@ import { auditService } from '@/services/audit.service'
 import { signatureRepository } from '@/repositories/signature.repository'
 import { pdfGeneratorService } from '@/services/pdf-generator.service'
 import { signatureService } from '@/services/signature.service'
+import { realtimeService } from '@/services/realtime.service'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class RequestController {
@@ -22,6 +24,17 @@ export class RequestController {
 		this.requestRepository = new RequestRepository()
 		this.patientRepository = new PatientRepository()
 		this.doctorRepository = new DoctorRepository()
+	}
+
+	/**
+	 * Lista opções de tipos de solicitações
+	 */
+	async options(_req: FastifyRequest, res: FastifyReply) {
+		return res.status(200).send({
+			success: true,
+			message: 'Opções de solicitações listadas com sucesso',
+			data: REQUEST_TYPE_OPTIONS,
+		})
 	}
 
 	/**
@@ -127,6 +140,17 @@ export class RequestController {
 			impactLevel: 'medium',
 			ipAddress: req.ip,
 			userAgent: req.headers['user-agent'],
+		})
+
+		realtimeService.broadcast({
+			type: 'requests.created',
+			data: {
+				requestIds: requests.map((request) => request.id),
+				patientId: data.patientId,
+				doctorId: data.doctorId,
+				appointmentId: data.appointmentId,
+				count: requests.length,
+			},
 		})
 
 		return res.status(201).send({
@@ -248,6 +272,17 @@ export class RequestController {
 
 			const updatedRequest = await this.requestRepository.update(id, data)
 
+			realtimeService.broadcast({
+				type: 'request.updated',
+				data: {
+					requestId: updatedRequest.id,
+					patientId: updatedRequest.patientId,
+					doctorId: updatedRequest.doctorId,
+					status: updatedRequest.status,
+					type: updatedRequest.type,
+				},
+			})
+
 			// Registra auditoria
 			await auditService.log({
 				userId,
@@ -311,6 +346,16 @@ export class RequestController {
 			}
 
 			await this.requestRepository.delete(id)
+
+			realtimeService.broadcast({
+				type: 'request.deleted',
+				data: {
+					requestId: id,
+					patientId: existingRequest.patientId,
+					doctorId: existingRequest.doctorId,
+					type: existingRequest.type,
+				},
+			})
 
 			// Registra auditoria
 			await auditService.log({

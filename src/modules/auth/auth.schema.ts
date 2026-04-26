@@ -14,6 +14,11 @@ export const SignInSchema = z.object({
 	password: z.string().min(6, 'Password must be at least 6 characters long'),
 })
 
+export const PatientSimpleSignInSchema = z.object({
+	cpf: z.string().length(11, 'CPF must be 11 characters long'),
+	birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Birth date must be in YYYY-MM-DD format'),
+})
+
 export const ValidateResetCodeSchema = z.object({
 	email: z.string().email('Invalid email address'),
 	resetCode: z.string().length(6, 'Reset code must be 6 characters long'),
@@ -36,6 +41,7 @@ export const UpdateUserProfileSchema = z.object({
 
 export type RegisterUserInput = z.infer<typeof RegisterUserSchema>
 export type SignInInput = z.infer<typeof SignInSchema>
+export type PatientSimpleSignInInput = z.infer<typeof PatientSimpleSignInSchema>
 export type RequestPasswordResetInput = z.infer<typeof ValidateResetCodeSchema>
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>
 export type UpdateUserProfileInput = z.infer<typeof UpdateUserProfileSchema>

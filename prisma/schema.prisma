@@ -107,6 +107,7 @@ model Patient {
 
 model Uti {
   id        String   @id @default(uuid())
+  bedNumber String   @unique
   patientId String?  @unique
   patient   Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
 
@@ -128,6 +129,10 @@ model Triagem {
   user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   appointmentId String?
   appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  queixaPrincipal  String?
+  duracaoQueixa    String?
+  examesAnteriores String?
 
   // Sinais Vitais
   frequenciaCardiaca      Float?
@@ -290,6 +295,7 @@ model Anaminese {
   
   // Queixa Principal e HDA
   queixaPrincipal        String?
+  anamneseRetorno        String?
   hdaInicio              String?
   hdaDuracao             String?
   hdaIntensidade         String?
@@ -317,6 +323,7 @@ model Anaminese {
   alergias                String?
   historicoFamiliar       String?
   habitosVida             String?
+  examesAnteriores        String?
   
   // Exame Físico e Diagnóstico
   revisaoSistemas         String?
@@ -407,6 +414,7 @@ enum Genders {
 enum StatusUti {
   available // UTI disponível
   occupied
+  disinfecting // Leito em desinfeccao
 }
 
 enum DoctorStatus {
@@ -428,6 +436,8 @@ enum RequestType {
   prescription // Solicitação de prescrição
   consultation // Solicitação de consulta médica
   utiAdmission // Solicitação de internação em UTI
+  medicalCertificate // Atestado medico
+  attendanceDeclaration // Declaracao de comparecimento
   other // Outros tipos de solicitação
 }
 

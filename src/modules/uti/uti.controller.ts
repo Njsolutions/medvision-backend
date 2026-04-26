@@ -13,10 +13,31 @@ export class UtiController {
 		this.dailyService = createDailyService()
 	}
 
+	private canCreateUtiBed(req: FastifyRequest) {
+		if (!req.user || (req.user.role !== 'master' && req.user.role !== 'admin')) {
+			return false
+		}
+
+		const configuredEmails = (process.env.UTI_BED_CREATOR_EMAILS || '')
+			.split(',')
+			.map((email) => email.trim().toLowerCase())
+			.filter(Boolean)
+
+		if (configuredEmails.length > 0) {
+			return configuredEmails.includes(req.user.email.toLowerCase())
+		}
+
+		const identity = `${req.user.name} ${req.user.email}`.toLowerCase()
+		return identity.includes('natan') || identity.includes('mateus')
+	}
+
 	async createEmpty(req: FastifyRequest, res: FastifyReply) {
 		try {
-			if (req.user?.role !== 'master' && req.user?.role !== 'admin') {
-				return res.status(403).send({ error: 'Insufficient permissions to create UTI bed' })
+			if (!this.canCreateUtiBed(req)) {
+				return res.status(403).send({
+					error: 'Insufficient permissions to create UTI bed',
+					message: 'Apenas usuários autorizados podem adicionar novos leitos de UTI',
+				})
 			}
 
 			// Primeiro cria o leito para obter o ID
@@ -58,8 +79,11 @@ export class UtiController {
 
 	async create(req: FastifyRequest, res: FastifyReply) {
 		try {
-			if (req.user?.role !== 'master' && req.user?.role !== 'admin') {
-				return res.status(403).send({ error: 'Insufficient permissions to create UTI bed' })
+			if (!this.canCreateUtiBed(req)) {
+				return res.status(403).send({
+					error: 'Insufficient permissions to create UTI bed',
+					message: 'Apenas usuários autorizados podem adicionar novos leitos de UTI',
+				})
 			}
 
 			const data = CreateUtiSchema.safeParse(req.body)

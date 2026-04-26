@@ -5,9 +5,11 @@ import { appointmentRoutes } from './appointment/appointment.routes'
 import { auditLogRoutes } from './auditlog/auditlog.routes'
 import { authRoutes } from './auth/auth.routes'
 import { doctorRoutes } from './doctor/doctor.routes'
+import { notificationRoutes } from './notification/notification.routes'
 import { patientRoutes } from './patient/patient.routes'
 import { patientFileRoutes } from './patientfile/patientfile.routes'
 import { prescriptionRoutes } from './prescription/prescription.routes'
+import { realtimeRoutes } from './realtime/realtime.routes'
 import { requestRoutes } from './request/request.routes'
 import { triagemRoutes } from './triagem/triagem.routes'
 import { utiRoutes } from './uti/uti.routes'
@@ -25,4 +27,6 @@ export function registerModules(app: FastifyInstance, version: string) {
 	app.register(requestRoutes, { prefix: `/v${version}/requests` })
 	app.register(prescriptionRoutes, { prefix: `/v${version}/prescriptions` })
 	app.register(anamneseRoutes, { prefix: `/v${version}/anamneses` })
+	app.register(realtimeRoutes, { prefix: `/v${version}/realtime` })
+	app.register(notificationRoutes, { prefix: `/v${version}/notifications` })
 }

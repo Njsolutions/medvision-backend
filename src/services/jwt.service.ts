@@ -14,12 +14,13 @@ export class JwtService {
 		this.fastify = fastify
 	}
 
-	generateToken(userId: string, role: UserRole, name: string): TokenData {
+	generateToken(userId: string, role: UserRole, name: string, extraPayload?: Partial<JWTPayload>): TokenData {
 		const expiresIn = 24 * 60 * 60 // 24 hours in seconds
 		const payload: JWTPayload = {
 			id: userId,
 			role,
 			name,
+			...extraPayload,
 			iat: Math.floor(Date.now() / 1000),
 			exp: Math.floor(Date.now() / 1000) + expiresIn,
 			aud: 'medvision',
