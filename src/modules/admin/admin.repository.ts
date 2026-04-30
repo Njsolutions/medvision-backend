@@ -90,6 +90,68 @@ export class AdminRepository {
 		})
 	}
 
+	async findAll(filters?: {
+		page?: number
+		limit?: number
+	}) {
+		const page = filters?.page || 1
+		const limit = filters?.limit || 10
+		const skip = (page - 1) * limit
+
+		const [admins, total] = await Promise.all([
+			db.admin.findMany({
+				include: {
+					user: {
+						select: {
+							id: true,
+							name: true,
+							cpf: true,
+							phone: true,
+							email: true,
+							active: true,
+							role: true,
+							createdAt: true,
+							updatedAt: true,
+						},
+					},
+				},
+				skip,
+				take: limit,
+				orderBy: {
+					user: {
+						name: 'asc',
+					},
+				},
+			}),
+			db.admin.count(),
+		])
+
+		return {
+			admins,
+			pagination: {
+				total,
+				page,
+				limit,
+				totalPages: Math.ceil(total / limit),
+			},
+		}
+	}
+
+	async delete(id: string) {
+		return db.admin.delete({
+			where: { id },
+			include: {
+				user: {
+					select: {
+						id: true,
+						name: true,
+						email: true,
+					},
+				},
+			},
+		})
+	}
+
 	async checkCpfExists(cpf: string) {
 		return db.user.findUnique({
 			where: { cpf },

@@ -157,12 +157,17 @@ export class DoctorController {
 				return res.status(403).send({ error: 'Insufficient permissions to list doctors' })
 			}
 
-			const doctors = await this.doctorRepository.findAll()
+			const { page, limit } = req.query as { page?: string; limit?: string }
+			
+			const result = await this.doctorRepository.findAll({
+				page: page ? parseInt(page) : undefined,
+				limit: limit ? parseInt(limit) : undefined,
+			})
 
 			return res.status(200).send({
 				message: 'Doctors retrieved successfully',
-				data: doctors,
-				count: doctors.length,
+				data: result.doctors,
+				pagination: result.pagination,
 			})
 		} catch (error) {
 			console.error('Error listing doctors:', error)

@@ -68,6 +68,67 @@ export class AdminController {
 		}
 	}
 
+	async delete(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (req.user?.role !== 'master') {
+				return res.status(403).send({ error: 'Insufficient permissions to delete admin' })
+			}
+
+			const params = AdminIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'Invalid admin ID', details: params.error })
+			}
+
+			const existingAdmin = await this.adminRepository.findById(params.data.id)
+
+			if (!existingAdmin) {
+				return res.status(404).send({ error: 'Admin not found' })
+			}
+
+			await this.adminRepository.delete(params.data.id)
+
+			if (req.user?.id && req.auditContext) {
+				await auditService.logUserUpdate(
+					req.user.id,
+					params.data.id,
+					{ active: false },
+					req.auditContext
+				)
+			}
+
+			return res.status(200).send({
+				message: 'Admin deleted successfully',
+			})
+		} catch (error) {
+			console.error('Error deleting admin:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
+	async listAll(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (req.user?.role !== 'master') {
+				return res.status(403).send({ error: 'Insufficient permissions to view admins' })
+			}
+
+			const { page, limit } = req.query as { page?: string; limit?: string }
+			
+			const result = await this.adminRepository.findAll({
+				page: page ? parseInt(page) : undefined,
+				limit: limit ? parseInt(limit) : undefined,
+			})
+
+			return res.status(200).send({
+				data: result.admins,
+				pagination: result.pagination,
+			})
+		} catch (error) {
+			console.error('Error listing admins:', error)
+			return res.status(500).send({ error: 'Internal server error' })
+		}
+	}
+
 	async update(req: FastifyRequest, res: FastifyReply) {
 		try {
 			if (req.user?.role !== 'master' && req.user?.role !== 'admin') {

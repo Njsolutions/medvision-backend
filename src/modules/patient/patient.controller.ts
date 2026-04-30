@@ -42,11 +42,16 @@ export class PatientController {
 				return res.status(403).send({ error: 'Insufficient permissions to list patients' })
 			}
 
-			const patients = await this.patientRepository.findAll()
+			const { page, limit } = req.query as { page?: string; limit?: string }
+			
+			const result = await this.patientRepository.findAll({
+				page: page ? parseInt(page) : undefined,
+				limit: limit ? parseInt(limit) : undefined,
+			})
 
 			// Formatar arquivos com URLs
 			const patientsWithFiles = await Promise.all(
-				patients.map(async (patient) => ({
+				result.patients.map(async (patient) => ({
 					...patient,
 					files: patient.files ? await this.formatFiles(patient.files) : [],
 				}))
@@ -55,6 +60,7 @@ export class PatientController {
 			return res.status(200).send({
 				message: 'Patients retrieved successfully',
 				data: patientsWithFiles,
+				pagination: result.pagination,
 			})
 		} catch (error) {
 			console.error('Error retrieving patients:', error)

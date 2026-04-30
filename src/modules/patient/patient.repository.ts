@@ -2,35 +2,57 @@ import { db } from '@/lib/prisma'
 import type { CreatePatientInput, UpdatePatientInput } from '@/modules/patient/patient.schema'
 
 export class PatientRepository {
-	async findAll() {
-		return db.patient.findMany({
-			include: {
-				user: {
-					select: {
-						id: true,
-						name: true,
-						cpf: true,
-						phone: true,
-						email: true,
-						active: true,
-						role: true,
-						createdAt: true,
-						updatedAt: true,
+	async findAll(filters?: {
+		page?: number
+		limit?: number
+	}) {
+		const page = filters?.page || 1
+		const limit = filters?.limit || 10
+		const skip = (page - 1) * limit
+
+		const [patients, total] = await Promise.all([
+			db.patient.findMany({
+				include: {
+					user: {
+						select: {
+							id: true,
+							name: true,
+							cpf: true,
+							phone: true,
+							email: true,
+							active: true,
+							role: true,
+							createdAt: true,
+							updatedAt: true,
+						},
+					},
+					files: {
+						where: {
+							deletedAt: null,
+						},
+						orderBy: {
+							createdAt: 'desc',
+						},
 					},
 				},
-				files: {
-					where: {
-						deletedAt: null,
-					},
-					orderBy: {
-						createdAt: 'desc',
-					},
+				skip,
+				take: limit,
+				orderBy: {
+					createdAt: 'desc',
 				},
+			}),
+			db.patient.count(),
+		])
+
+		return {
+			patients,
+			pagination: {
+				total,
+				page,
+				limit,
+				totalPages: Math.ceil(total / limit),
 			},
-			orderBy: {
-				createdAt: 'desc',
-			},
-		})
+		}
 	}
 
 	async findById(id: string) {
