@@ -69,7 +69,7 @@ export function createRateLimitService() {
 	function checkPasswordResetLimit(identifier: string): boolean {
 		return isLimited(identifier, {
 			windowMs: 60 * 60 * 1000,
-			maxRequests: 3,
+			maxRequests: 5,
 		})
 	}
 
