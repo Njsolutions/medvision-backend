@@ -5,12 +5,24 @@ export class UserRepository {
 	async findByEmail(email: string) {
 		return db.user.findUnique({
 			where: { email },
+			include: {
+				doctor: true,
+				patient: true,
+				admin: true,
+				master: true,
+			},
 		})
 	}
 
 	async findById(id: string) {
 		return db.user.findUnique({
 			where: { id },
+			include: {
+				doctor: true,
+				patient: true,
+				admin: true,
+				master: true,
+			},
 		})
 	}
 

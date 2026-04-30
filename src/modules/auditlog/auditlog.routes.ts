@@ -1,10 +1,16 @@
 import type { FastifyInstance } from 'fastify'
 import { auditLogController } from './auditlog.controller'
 import { GetAuditLogsSchema } from './auditlog.schema'
+import { isAdminLike } from '@/utils/security/access-control'
 
 export async function auditLogRoutes(app: FastifyInstance) {
   // Todas as rotas de auditoria requerem autenticação
   app.addHook('onRequest', app.authenticate)
+  app.addHook('preHandler', async (req, res) => {
+    if (!isAdminLike(req.user)) {
+      return res.status(403).send({ error: 'Insufficient permissions to view audit logs' })
+    }
+  })
 
   /**
    * Lista logs de auditoria com filtros

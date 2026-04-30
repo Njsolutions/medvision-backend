@@ -17,6 +17,7 @@ import { cronService } from '@/services/cron.service'
 import { pdfGeneratorService } from '@/services/pdf-generator.service'
 import { realtimeService } from '@/services/realtime.service'
 import { validateDoctorAvailability, formatWeeklyAvailability } from '@/utils/functions/availability'
+import { canAccessAppointment, isAdminLike, isDoctor as hasDoctorRole, isPatient as hasPatientRole } from '@/utils/security/access-control'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class AppointmentController {
@@ -92,6 +93,13 @@ export class AppointmentController {
 	}
 
 	// Validar disponibilidade do médico
+	if (hasDoctorRole(req.user) && req.user?.doctorId !== data.data.doctorId) {
+		return res.status(403).send({
+			error: 'Permissão negada',
+			message: 'Médicos só podem criar consultas para a própria agenda',
+		})
+	}
+
 	const appointmentDate = new Date(data.data.appointmentDate)
 	
 	console.log('🔍 Validando disponibilidade do médico:', {
@@ -180,30 +188,21 @@ export class AppointmentController {
 		})
 
 		// Gerar tokens de acesso para paciente, médico e admin (se aplicável)
-		let patientToken: string | undefined
 		let doctorToken: string | undefined
 		let adminToken: string | undefined
 
 		try {
-			patientToken = await this.dailyService.generateToken(
-				dailyRoom.roomName,
-				data.data.patientId,
-				'patient',
-				{
-					userName: patientExists.user.name,
-					expiresIn: 86400, // 24 horas
-				},
-			)
-
-			doctorToken = await this.dailyService.generateToken(
-				dailyRoom.roomName,
-				data.data.doctorId,
-				'doctor',
-				{
-					userName: doctorExists.user.name,
-					expiresIn: 86400, // 24 horas
-				},
-			)
+			if (req.user?.role === 'doctor') {
+				doctorToken = await this.dailyService.generateToken(
+					dailyRoom.roomName,
+					req.user.id,
+					'doctor',
+					{
+						userName: req.user.name || doctorExists.user.name,
+						expiresIn: 86400, // 24 horas
+					},
+				)
+			}
 
 			// Gerar token para admin/master que está criando a consulta
 			if (req.user?.role === 'admin' || req.user?.role === 'master') {
@@ -257,8 +256,7 @@ export class AppointmentController {
 				data: {
 					appointment: appointmentWithFiles,
 					roomUrl: dailyRoom.url,
-					patientToken,
-					doctorToken,
+					...(doctorToken && { doctorToken }),
 					...(adminToken && { adminToken }),
 				},
 			})
@@ -295,6 +293,15 @@ export class AppointmentController {
 			if (!existingAppointment) {
 				return res.status(404).send({
 					message: 'A consulta especificada não existe no sistema'
+				});
+			}
+			if (
+				!isAdminLike(req.user) &&
+				!(hasDoctorRole(req.user) && req.user?.doctorId === existingAppointment.doctorId)
+			) {
+				return res.status(403).send({
+					error: 'Permissão negada',
+					message: 'Você não possui permissão para atualizar esta consulta',
 				});
 			}
 			// Validar se a consulta já foi finalizada (não pode mais ser editada)
@@ -415,7 +422,7 @@ export class AppointmentController {
 				message: 'Consulta atualizada com sucesso',
 				data: {
 					appointment: updatedAppointment,
-					roomUrl: `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${updatedAppointment.roomName}`
+					roomUrl: updatedAppointment.roomLink
 				},
 			});
 		} catch (error) {
@@ -461,8 +468,13 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				filters.patientId = query.data.patientId
 			}
 
+			if (!isAdminLike(req.user) && !hasDoctorRole(req.user) && !hasPatientRole(req.user)) {
+				return res.status(403).send({ error: 'Insufficient permissions to list appointments' })
+			}
+
 			// Se o usuário é médico, buscar automaticamente o doctorId pelo userId do token
 			const isDoctor = req.user?.role === 'doctor'
+			const isPatientUser = req.user?.role === 'patient'
 			let doctorProfile = null
 			if (isDoctor) {
 				doctorProfile = await this.doctorRepository.findByUserId(req.user.id)
@@ -472,6 +484,13 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				filters.doctorId = doctorProfile.id
 			} else if (query.data.doctorId) {
 				filters.doctorId = query.data.doctorId
+			}
+
+			if (isPatientUser) {
+				if (!req.user?.patientId) {
+					return res.status(404).send({ error: 'Patient profile not found' })
+				}
+				filters.patientId = req.user.patientId
 			}
 
 			const startDateInput = query.data.startDate || query.data.dateFrom
@@ -537,33 +556,15 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				// Adicionar roomUrl e tokens se a consulta tiver roomName
 				let roomData = {}
 				if (appointment.roomName) {
-					const roomUrl = `https://${process.env.DAILY_DOMAIN || 'medvision.daily.co'}/${appointment.roomName}`
+					const roomUrl = appointment.roomLink
 					
 					// Gerar tokens apenas para consultas agendadas ou em progresso
 					if (appointment.status === 'scheduled' || appointment.status === 'inProgress') {
 						try {
-							const patientToken = await this.dailyService.generateToken(
-								appointment.roomName,
-								appointment.patientId,
-								'patient',
-								{
-									userName: appointment.patient.user.name,
-									expiresIn: 86400,
-								}
-							)
-
-							const doctorToken = await this.dailyService.generateToken(
-								appointment.roomName,
-								appointment.doctorId,
-								'doctor',
-								{
-									userName: appointment.doctor.user.name,
-									expiresIn: 86400,
-								}
-							)
-
-							// Gerar token para admin/master
+							let patientToken: string | undefined
+							let doctorToken: string | undefined
 							let adminToken: string | undefined
+
 							if (req.user?.role === 'admin' || req.user?.role === 'master') {
 								adminToken = await this.dailyService.generateToken(
 									appointment.roomName,
@@ -574,9 +575,34 @@ async list(req: FastifyRequest, res: FastifyReply) {
 										expiresIn: 86400,
 									}
 								)
+							} else if (req.user?.role === 'doctor') {
+								doctorToken = await this.dailyService.generateToken(
+									appointment.roomName,
+									req.user.id,
+									'doctor',
+									{
+										userName: req.user.name || appointment.doctor.user.name,
+										expiresIn: 86400,
+									}
+								)
+							} else if (req.user?.role === 'patient') {
+								patientToken = await this.dailyService.generateToken(
+									appointment.roomName,
+									req.user.id,
+									'patient',
+									{
+										userName: req.user.name || appointment.patient.user.name,
+										expiresIn: 86400,
+									}
+								)
 							}
 
-							roomData = { roomUrl, patientToken, doctorToken, ...(adminToken && { adminToken }) }
+							roomData = {
+								roomUrl,
+								...(patientToken && { patientToken }),
+								...(doctorToken && { doctorToken }),
+								...(adminToken && { adminToken }),
+							}
 						} catch (error) {
 							console.error('Error generating tokens for appointment:', appointment.id, error)
 							roomData = { roomUrl }
@@ -629,6 +655,10 @@ async list(req: FastifyRequest, res: FastifyReply) {
 			}
 
 			// Verificar se a consulta foi concluída
+			if (req.user?.role !== 'patient' || req.user.patientId !== appointment.patientId) {
+				return res.status(403).send({ error: 'Insufficient permissions to add patient feedback' })
+			}
+
 			if (appointment.status !== 'completed') {
 				return res.status(400).send({ error: 'Feedback can only be added to completed appointments' })
 			}
@@ -682,6 +712,10 @@ async list(req: FastifyRequest, res: FastifyReply) {
 			}
 
 			// Verificar se a consulta foi concluída
+			if (req.user?.role !== 'doctor' || req.user.doctorId !== appointment.doctorId) {
+				return res.status(403).send({ error: 'Insufficient permissions to add doctor feedback' })
+			}
+
 			if (appointment.status !== 'completed') {
 				return res.status(400).send({ error: 'Feedback can only be added to completed appointments' })
 			}
@@ -760,6 +794,10 @@ async list(req: FastifyRequest, res: FastifyReply) {
 
 			if (!appointment) {
 				return res.status(404).send({ error: 'Appointment not found' })
+			}
+
+			if (!(await canAccessAppointment(req.user, appointment))) {
+				return res.status(403).send({ error: 'Insufficient permissions to access this appointment room' })
 			}
 
 			if (!appointment.roomLink) {

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { patientFileRepository } from '@/modules/patientfile/patientfile.repository'
 import { storageService } from '@/services/storage.service'
 import { auditService } from '@/services/audit.service'
+import { canAccessPatient, isAdminLike, isDoctor } from '@/utils/security/access-control'
 import {
 	UploadFileSchema,
 	GetFileUrlSchema,
@@ -60,6 +61,10 @@ export class PatientFileController {
 				return res.status(400).send({
 					error: 'Missing required fields: patientId and fileType',
 				})
+			}
+
+			if (!(isAdminLike(req.user) || isDoctor(req.user)) || !(await canAccessPatient(req.user, patientId))) {
+				return res.status(403).send({ error: 'Insufficient permissions to upload file for this patient' })
 			}
 
 			// Converter o stream em buffer
@@ -160,6 +165,10 @@ export class PatientFileController {
 				return res.status(404).send({ error: 'File not found' })
 			}
 
+			if (!(await canAccessPatient(req.user, file.patientId))) {
+				return res.status(403).send({ error: 'Insufficient permissions to access this file' })
+			}
+
 			// Gerar URL assinada válida por 1 hora
 			const signedUrl = await storageService.getSignedUrl(file.storageKey, 3600)
 
@@ -218,6 +227,10 @@ export class PatientFileController {
 				})
 			}
 
+			if (!(await canAccessPatient(req.user, params.data.patientId))) {
+				return res.status(403).send({ error: 'Insufficient permissions to list files for this patient' })
+			}
+
 			const result = await patientFileRepository.listByPatient(params.data)
 
 			return res.status(200).send({
@@ -248,6 +261,10 @@ export class PatientFileController {
 
 			if (!file) {
 				return res.status(404).send({ error: 'File not found' })
+			}
+
+			if (!isAdminLike(req.user)) {
+				return res.status(403).send({ error: 'Insufficient permissions to delete files' })
 			}
 
 			// Soft delete no banco
@@ -296,6 +313,10 @@ export class PatientFileController {
 
 			const patientId = params.data.id
 
+			if (!(await canAccessPatient(req.user, patientId))) {
+				return res.status(403).send({ error: 'Insufficient permissions to view file statistics for this patient' })
+			}
+
 			const [totalFiles, totalSize] = await Promise.all([
 				patientFileRepository.countByPatient(patientId),
 				patientFileRepository.getTotalSizeByPatient(patientId),
@@ -334,6 +355,10 @@ export class PatientFileController {
 
 			if (!file) {
 				return res.status(404).send({ error: 'File not found' })
+			}
+
+			if (!(await canAccessPatient(req.user, file.patientId))) {
+				return res.status(403).send({ error: 'Insufficient permissions to download this file' })
 			}
 
 			// Obter arquivo do storage

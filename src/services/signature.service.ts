@@ -31,11 +31,13 @@ export class SignatureService {
 	private readonly secretKey: string
 
 	constructor() {
-		this.secretKey = process.env.SIGNATURE_SECRET_KEY || 'change-this-secret-key-in-production'
+		const secretKey = process.env.SIGNATURE_SECRET_KEY
 		
-		if (this.secretKey === 'change-this-secret-key-in-production') {
-			console.warn('⚠️  AVISO: Use uma chave secreta forte em produção!')
+		if (!secretKey) {
+			throw new Error('SIGNATURE_SECRET_KEY must be configured')
 		}
+
+		this.secretKey = secretKey
 	}
 
 	/**

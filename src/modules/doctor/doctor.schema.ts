@@ -20,7 +20,7 @@ export const UpdateDoctorSchema = z.object({
 	specialty: z.string().min(1, 'Specialty is required').optional(),
 	monthlySlots: z.number().int().min(0).optional(),
 	weeklyAvailability: z.any().optional(),
-	status: z.enum(['active', 'inactive', 'suspended']).optional(),
+	status: z.enum(['active', 'inactive', 'onLeave']).optional(),
 	utiAccess: z.boolean().optional(),
 	active: z.boolean().optional(),
 })

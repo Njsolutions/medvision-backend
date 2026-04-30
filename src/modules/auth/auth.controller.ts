@@ -94,6 +94,10 @@ export class AuthController {
 				return res.status(401).send({ error: 'Email ou senha inválidos' })
 			}
 
+			if (!existingUser.active) {
+				return res.status(403).send({ error: 'Usuário inativo' })
+			}
+
 			const isPasswordValid = this.cryptoService.comparePassword(data.data.password, existingUser.password)
 
 			if (!(await isPasswordValid)) {
@@ -104,6 +108,12 @@ export class AuthController {
 				existingUser.id,
 				existingUser.role,
 				existingUser.name,
+				{
+					userId: existingUser.id,
+					email: existingUser.email,
+					doctorId: existingUser.doctor?.id,
+					patientId: existingUser.patient?.id,
+				},
 			)
 
 			// Registra o login no log de auditoria
@@ -142,6 +152,10 @@ export class AuthController {
 
 			if (!existingUser || existingUser.role !== 'patient' || !existingUser.patient || !existingUser.patient.birthDate) {
 				return res.status(401).send({ error: 'CPF ou data de nascimento inválidos' })
+			}
+
+			if (!existingUser.active) {
+				return res.status(403).send({ error: 'Usuário inativo' })
 			}
 
 			const patientBirthDate = existingUser.patient.birthDate.toISOString().slice(0, 10)

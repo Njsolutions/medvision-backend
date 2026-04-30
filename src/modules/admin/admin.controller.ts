@@ -15,9 +15,9 @@ export class AdminController {
 
 	async create(req: FastifyRequest, res: FastifyReply) {
 		try {
-			/* if (req.user !== 'master') {
+			if (req.user?.role !== 'master') {
 				return res.status(403).send({ error: 'Insufficient permissions to create admin' })
-			} */
+			}
 
 			const data = CreateAdminSchema.safeParse(req.body)
 

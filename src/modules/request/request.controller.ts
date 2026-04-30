@@ -13,6 +13,7 @@ import { signatureRepository } from '@/repositories/signature.repository'
 import { pdfGeneratorService } from '@/services/pdf-generator.service'
 import { signatureService } from '@/services/signature.service'
 import { realtimeService } from '@/services/realtime.service'
+import { canAccessDoctor, canAccessPatient, isAdminLike } from '@/utils/security/access-control'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class RequestController {
@@ -49,6 +50,20 @@ export class RequestController {
 				return res.status(401).send({
 					success: false,
 					message: 'Usuário não autenticado',
+				})
+			}
+
+			if (!isAdminLike(req.user) && req.user?.doctorId !== data.doctorId) {
+				return res.status(403).send({
+					success: false,
+					message: 'Sem permissao para criar solicitacoes para este medico',
+				})
+			}
+
+			if (!(await canAccessPatient(req.user, data.patientId))) {
+				return res.status(403).send({
+					success: false,
+					message: 'Sem permissao para criar solicitacoes para este paciente',
 				})
 			}
 
@@ -183,6 +198,21 @@ export class RequestController {
 	async list(req: FastifyRequest, res: FastifyReply) {
 		try {
 			const filters = ListRequestsSchema.parse(req.query)
+
+			if (req.user?.role === 'patient') {
+				if (!req.user.patientId) {
+					return res.status(403).send({ success: false, message: 'Paciente nao vinculado ao usuario' })
+				}
+				filters.patientId = req.user.patientId
+			} else if (req.user?.role === 'doctor') {
+				if (!req.user.doctorId) {
+					return res.status(403).send({ success: false, message: 'Medico nao vinculado ao usuario' })
+				}
+				filters.doctorId = req.user.doctorId
+			} else if (!isAdminLike(req.user)) {
+				return res.status(403).send({ success: false, message: 'Sem permissao para listar solicitacoes' })
+			}
+
 			const result = await this.requestRepository.findMany(filters)
 
 			return res.status(200).send({
@@ -220,6 +250,13 @@ export class RequestController {
 				return res.status(404).send({
 					success: false,
 					message: 'Solicitação não encontrada',
+				})
+			}
+
+			if (request.patientId && !(await canAccessPatient(req.user, request.patientId))) {
+				return res.status(403).send({
+					success: false,
+					message: 'Sem permissao para acessar esta solicitacao',
 				})
 			}
 
@@ -267,6 +304,13 @@ export class RequestController {
 				return res.status(404).send({
 					success: false,
 					message: 'Solicitação não encontrada',
+				})
+			}
+
+			if (!isAdminLike(req.user) && existingRequest.doctorId !== req.user?.doctorId) {
+				return res.status(403).send({
+					success: false,
+					message: 'Sem permissao para atualizar esta solicitacao',
 				})
 			}
 
@@ -345,6 +389,13 @@ export class RequestController {
 				})
 			}
 
+			if (!isAdminLike(req.user) && existingRequest.doctorId !== req.user?.doctorId) {
+				return res.status(403).send({
+					success: false,
+					message: 'Sem permissao para deletar esta solicitacao',
+				})
+			}
+
 			await this.requestRepository.delete(id)
 
 			realtimeService.broadcast({
@@ -400,6 +451,13 @@ export class RequestController {
 		try {
 			const { patientId } = req.params as { patientId: string }
 
+			if (!(await canAccessPatient(req.user, patientId))) {
+				return res.status(403).send({
+					success: false,
+					message: 'Sem permissao para acessar solicitacoes deste paciente',
+				})
+			}
+
 			const requests = await this.requestRepository.findByPatientId(patientId)
 
 			return res.status(200).send({
@@ -423,6 +481,13 @@ export class RequestController {
 	async findByDoctorId(req: FastifyRequest, res: FastifyReply) {
 		try {
 			const { doctorId } = req.params as { doctorId: string }
+
+			if (!canAccessDoctor(req.user, doctorId)) {
+				return res.status(403).send({
+					success: false,
+					message: 'Sem permissao para acessar solicitacoes deste medico',
+				})
+			}
 
 			const requests = await this.requestRepository.findByDoctorId(doctorId)
 

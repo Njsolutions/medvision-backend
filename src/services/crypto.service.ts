@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt'
+import crypto from 'node:crypto'
 
 const SALT_ROUNDS = 10
 
@@ -8,7 +9,7 @@ export class CryptoService {
 			const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+[]{}|;:,.<>?'
 			let password = ''
 			for (let i = 0; i < size; i++) {
-				const randomIndex = Math.floor(Math.random() * chars.length)
+				const randomIndex = crypto.randomInt(chars.length)
 				password += chars[randomIndex]
 			}
 			return password
@@ -37,7 +38,7 @@ export class CryptoService {
 		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 		let code = ''
 		for (let i = 0; i < length; i++) {
-			const randomIndex = Math.floor(Math.random() * chars.length)
+			const randomIndex = crypto.randomInt(chars.length)
 			code += chars[randomIndex]
 		}
 		return code
@@ -48,7 +49,7 @@ export class CryptoService {
 	}
 
 	generateResetToken(): string {
-		return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+		return crypto.randomBytes(32).toString('base64url')
 	}
 
 	hashToken(token: string): string {

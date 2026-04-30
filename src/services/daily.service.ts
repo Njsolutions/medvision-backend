@@ -19,6 +19,17 @@ export interface DailyService {
 	): Promise<string>
 }
 
+export class DailyApiError extends Error {
+	constructor(
+		message: string,
+		public readonly status?: number,
+		public readonly responseBody?: string,
+	) {
+		super(message)
+		this.name = 'DailyApiError'
+	}
+}
+
 export function createDailyService(): DailyService {
 	const apiKey = process.env.DAILY_CO_API_KEY
 	if (!apiKey) {
@@ -32,6 +43,22 @@ export function createDailyService(): DailyService {
 		Authorization: `Bearer ${apiKey}`,
 	}
 
+	const telemedicineRoomProperties = {
+		enable_chat: true,
+		enable_knocking: false,
+		enable_screenshare: false,
+		enable_people_ui: false,
+		enable_network_ui: true,
+		enable_noise_cancellation_ui: true,
+		enable_prejoin_ui: true,
+		enable_video_processing_ui: true,
+		enforce_unique_user_ids: true,
+		eject_at_room_exp: false,
+		max_participants: 4,
+		start_video_off: false,
+		start_audio_off: false,
+	}
+
 	async function createRoom(roomName: string, appointmentId: string) {
 		try {
 			const response = await fetch(`${baseUrl}/rooms`, {
@@ -40,17 +67,7 @@ export function createDailyService(): DailyService {
 				body: JSON.stringify({
 					name: roomName,
 					privacy: 'private',
-					properties: {
-						enable_chat: true,
-						enable_screenshare: false,
-						enable_recording: 'off',
-						enable_knocking: false,
-						enable_network_ui: false,
-						enable_prejoin_ui: false, // Desabilitar prejoin para evitar problemas com token
-						eject_at_room_exp: false,
-						start_video_off: false,
-						start_audio_off: false,
-					},
+					properties: telemedicineRoomProperties,
 					// Não definir 'exp' para que a sala seja permanente
 				}),
 			})
@@ -59,7 +76,11 @@ export function createDailyService(): DailyService {
 
 			if (!response.ok) {
 				console.error('Erro ao criar sala Daily:', responseText)
-				throw new Error(`Erro ao criar sala: ${response.statusText} - ${responseText}`)
+				throw new DailyApiError(
+					`Erro ao criar sala Daily: ${response.status} ${response.statusText}`,
+					response.status,
+					responseText,
+				)
 			}
 
 			const room = JSON.parse(responseText)
@@ -72,7 +93,10 @@ export function createDailyService(): DailyService {
 			}
 		} catch (error) {
 			console.error('❌ Erro ao criar sala:', error)
-			throw new Error(`Falha ao criar sala Daily: ${error}`)
+			if (error instanceof DailyApiError) {
+				throw error
+			}
+			throw new DailyApiError(`Falha ao criar sala Daily: ${error}`)
 		}
 	}
 
@@ -129,12 +153,22 @@ export function createDailyService(): DailyService {
 				expiresIn: options?.expiresIn || 3600,
 			})
 
-			const tokenProperties: any = {
+			const tokenProperties: Record<string, unknown> = {
 				room_name: roomName,
 				user_name: options?.userName || 'Usuário',
 				user_id: String(userId),
 				exp: Math.floor(Date.now() / 1000) + (options?.expiresIn || 3600),
 				is_owner: isOwner,
+				enable_recording_ui: false,
+				enable_screenshare: false,
+				lang: 'pt-BR',
+				start_cloud_recording: false,
+				start_video_off: false,
+				start_audio_off: false,
+				permissions: {
+					canAdmin: isOwner ? ['participants'] : false,
+					canSend: ['video', 'audio'],
+				},
 			}
 
 			// Adiciona permissões válidas para tokens

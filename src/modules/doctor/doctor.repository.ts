@@ -156,7 +156,7 @@ export class DoctorRepository {
 				...(specialty && { specialty }),
 				...(monthlySlots !== undefined && { monthlySlots }),
 				...(weeklyAvailability !== undefined && { weeklyAvailability }),
-				...(status && status !== 'suspended' && { status }),
+				...(status && { status }),
 				...(utiAccess !== undefined && { utiAccess }),
 				user: {
 					update: {

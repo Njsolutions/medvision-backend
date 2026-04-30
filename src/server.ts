@@ -20,7 +20,7 @@ if (!jwtSecret) {
 	throw new Error('JWT_SECRET must be configured')
 }
 
-const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,https://medvision-frontend.vercel.app,https://medvision.njsolutions.com.br')
+const corsOrigins = (process.env.CORS_ORIGINS || '')
 	.split(',')
 	.map((origin) => origin.trim())
 	.filter(Boolean)

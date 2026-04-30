@@ -3,6 +3,7 @@ import { CreatePatientSchema, UpdatePatientSchema, PatientIdSchema } from '@/mod
 import { CryptoService } from '@/services/crypto.service'
 import { auditService } from '@/services/audit.service'
 import { storageService } from '@/services/storage.service'
+import { canAccessPatient, isAdminLike } from '@/utils/security/access-control'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class PatientController {
@@ -37,6 +38,10 @@ export class PatientController {
 
 	async getAll(req: FastifyRequest, res: FastifyReply) {
 		try {
+			if (!isAdminLike(req.user)) {
+				return res.status(403).send({ error: 'Insufficient permissions to list patients' })
+			}
+
 			const patients = await this.patientRepository.findAll()
 
 			// Formatar arquivos com URLs
@@ -71,6 +76,10 @@ export class PatientController {
 				return res.status(404).send({ error: 'Patient not found' })
 			}
 
+			if (!(await canAccessPatient(req.user, patient.id))) {
+				return res.status(403).send({ error: 'Insufficient permissions to view patient' })
+			}
+
 			// Formatar arquivos com URLs
 			const patientWithFiles = {
 				...patient,
@@ -89,9 +98,9 @@ export class PatientController {
 
 	async create(req: FastifyRequest, res: FastifyReply) {
 		try {
-			/* if (req.user !== 'master' && req.user?.role !== 'admin') {
+			if (!isAdminLike(req.user)) {
 				return res.status(403).send({ error: 'Insufficient permissions to create patient' })
-			} */
+			}
 
 			const data = CreatePatientSchema.safeParse(req.body)
 
@@ -153,9 +162,9 @@ export class PatientController {
 
 	async update(req: FastifyRequest, res: FastifyReply) {
 		try {
-			/* if (req.user !== 'master' && req.user?.role !== 'admin') {
+			if (!isAdminLike(req.user)) {
 				return res.status(403).send({ error: 'Insufficient permissions to update patient' })
-			} */
+			}
 
 			const params = PatientIdSchema.safeParse(req.params)
 

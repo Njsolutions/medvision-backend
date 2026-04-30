@@ -11,6 +11,7 @@ import { ImpactLevel } from '@/types/audit.types';
 import { signatureService } from '@/services/signature.service';
 import { signatureRepository } from '@/repositories/signature.repository';
 import { pdfGeneratorService } from '@/services/pdf-generator.service';
+import { canAccessDoctor, canAccessPatient, isAdminLike } from '@/utils/security/access-control';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 export class AnamneseController {
@@ -25,6 +26,14 @@ export class AnamneseController {
 					error: 'Invalid data',
 					details: validation.error.issues,
 				});
+			}
+
+			if (!isAdminLike(req.user) && req.user?.doctorId !== validation.data.doctorId) {
+				return res.status(403).send({ error: 'Sem permissao para criar anamnese para este medico' });
+			}
+
+			if (!(await canAccessPatient(req.user, validation.data.patientId))) {
+				return res.status(403).send({ error: 'Sem permissao para criar anamnese para este paciente' });
 			}
 
 			// Cria a anamnese
@@ -141,6 +150,10 @@ export class AnamneseController {
 			}
 
 			// ✅ BUSCA ASSINATURA DA ANAMNESE
+			if (!(await canAccessPatient(req.user, anamnese.patientId))) {
+				return res.status(403).send({ error: 'Sem permissao para acessar esta anamnese' });
+			}
+
 			const signatures = await signatureRepository.findByDocument(
 				'anamnese',
 				anamnese.id
@@ -168,6 +181,10 @@ export class AnamneseController {
 				});
 			}
 
+			if (!(await canAccessPatient(req.user, validation.data.patientId))) {
+				return res.status(403).send({ error: 'Sem permissao para acessar anamneses deste paciente' });
+			}
+
 			const anamneses = await anamneseRepository.findByPatientId(validation.data.patientId);
 
 			return res.status(200).send({
@@ -191,6 +208,10 @@ export class AnamneseController {
 				});
 			}
 
+			if (!canAccessDoctor(req.user, validation.data.doctorId)) {
+				return res.status(403).send({ error: 'Sem permissao para acessar anamneses deste medico' });
+			}
+
 			const anamneses = await anamneseRepository.findByDoctorId(validation.data.doctorId);
 
 			return res.status(200).send({
@@ -203,8 +224,12 @@ export class AnamneseController {
 		}
 	}
 
-	async getAll(_req: FastifyRequest, res: FastifyReply) {
+	async getAll(req: FastifyRequest, res: FastifyReply) {
 		try {
+			if (!isAdminLike(req.user)) {
+				return res.status(403).send({ error: 'Sem permissao para listar anamneses' });
+			}
+
 			const anamneses = await anamneseRepository.findAll();
 
 			return res.status(200).send({

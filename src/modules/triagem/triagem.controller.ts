@@ -7,6 +7,7 @@ import {
 } from '@/modules/triagem/triagem.schema'
 import { auditService } from '@/services/audit.service'
 import { ImpactLevel } from '@/types/audit.types'
+import { canAccessPatient, isAdminLike } from '@/utils/security/access-control'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class TriagemController {
@@ -16,8 +17,12 @@ export class TriagemController {
 		this.triagemRepository = new TriagemRepository()
 	}
 
-	async getAll(_req: FastifyRequest, res: FastifyReply) {
+	async getAll(req: FastifyRequest, res: FastifyReply) {
 		try {
+			if (!isAdminLike(req.user)) {
+				return res.status(403).send({ error: 'Insufficient permissions to list triagens' })
+			}
+
 			const triagens = await this.triagemRepository.findAll()
 
 			return res.status(200).send({
@@ -44,6 +49,10 @@ export class TriagemController {
 				return res.status(404).send({ error: 'Triagem not found' })
 			}
 
+			if (!(await canAccessPatient(req.user, triagem.patientId))) {
+				return res.status(403).send({ error: 'Insufficient permissions to view this triagem' })
+			}
+
 			return res.status(200).send({
 				message: 'Triagem retrieved successfully',
 				data: triagem,
@@ -60,6 +69,10 @@ export class TriagemController {
 
 			if (!params.success) {
 				return res.status(400).send({ error: 'Invalid patient ID', details: params.error })
+			}
+
+			if (!(await canAccessPatient(req.user, params.data.patientId))) {
+				return res.status(403).send({ error: 'Insufficient permissions to view triagens for this patient' })
 			}
 
 			const triagens = await this.triagemRepository.findByPatientId(params.data.patientId)
@@ -85,6 +98,10 @@ export class TriagemController {
 			// Verifica se o usuário está autenticado
 			if (!req.user?.id) {
 				return res.status(401).send({ error: 'User not authenticated' })
+			}
+
+			if (!isAdminLike(req.user)) {
+				return res.status(403).send({ error: 'Insufficient permissions to create triagem for this patient' })
 			}
 
 			// Se houver appointmentId, verifica se já existe triagem para essa consulta
@@ -151,6 +168,10 @@ export class TriagemController {
 				return res.status(404).send({ error: 'Triagem not found' })
 			}
 
+			if (!isAdminLike(req.user)) {
+				return res.status(403).send({ error: 'Insufficient permissions to update this triagem' })
+			}
+
 			const updatedTriagem = await this.triagemRepository.update(params.data.id, data.data)
 
 			// Registra a atualização da triagem no log de auditoria
@@ -159,7 +180,11 @@ export class TriagemController {
 					userId: req.user.id,
 					action: 'UPDATE_TRIAGEM',
 					description: `Triagem atualizada para o paciente ${updatedTriagem.patient.user.name}`,
-					content: data.data,
+					content: {
+						triagemId: params.data.id,
+						patientId: updatedTriagem.patientId,
+						changes: data.data,
+					},
 					impactLevel: ImpactLevel.MEDIUM,
 					ipAddress: req.auditContext.ipAddress,
 					userAgent: req.auditContext.userAgent,
@@ -188,6 +213,10 @@ export class TriagemController {
 
 			if (!existingTriagem) {
 				return res.status(404).send({ error: 'Triagem not found' })
+			}
+
+			if (!isAdminLike(req.user)) {
+				return res.status(403).send({ error: 'Insufficient permissions to delete this triagem' })
 			}
 
 			await this.triagemRepository.delete(params.data.id)
