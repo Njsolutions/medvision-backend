@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "tsx watch --env-file=.env src/server.ts",
 		"build": "tsc",
-		"start": "node --env-file=.env --require ./scripts/register-dist-paths.cjs dist/server.js",
+		"start": "node --require ./scripts/register-dist-paths.cjs dist/server.js",
 		"test": "tsx --test \"tests/**/*.test.ts\"",
 		"format": "biome format --write",
 		"db:generate": "pnpm exec prisma generate",

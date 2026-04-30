@@ -8,6 +8,10 @@ export interface DailyService {
 	}>
 	deleteRoom(roomName: string): Promise<void>
 	getRoom(roomName: string): Promise<any>
+	setRoomPrivacy(roomName: string, privacy: 'public' | 'private'): Promise<{
+		url: string
+		roomName: string
+	}>
 	generateToken(
 		roomName: string,
 		userId: string,
@@ -132,6 +136,45 @@ export function createDailyService(): DailyService {
 		}
 	}
 
+	async function setRoomPrivacy(roomName: string, privacy: 'public' | 'private') {
+		try {
+			const response = await fetch(`${baseUrl}/rooms/${roomName}`, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify({
+					privacy,
+					properties: {
+						enable_screenshare: false,
+					},
+				}),
+			})
+
+			const responseText = await response.text()
+
+			if (!response.ok) {
+				console.error('Erro ao atualizar privacidade da sala Daily:', responseText)
+				throw new DailyApiError(
+					`Erro ao atualizar sala Daily: ${response.status} ${response.statusText}`,
+					response.status,
+					responseText,
+				)
+			}
+
+			const room = JSON.parse(responseText)
+
+			return {
+				url: room.url,
+				roomName: room.name,
+			}
+		} catch (error) {
+			console.error('Falha ao atualizar privacidade da sala Daily:', error)
+			if (error instanceof DailyApiError) {
+				throw error
+			}
+			throw new DailyApiError(`Falha ao atualizar privacidade da sala Daily: ${error}`)
+		}
+	}
+
 	async function generateToken(
 		roomName: string,
 		userId: string,
@@ -212,6 +255,7 @@ export function createDailyService(): DailyService {
 		createRoom,
 		deleteRoom,
 		getRoom,
+		setRoomPrivacy,
 		generateToken,
 	}
 }

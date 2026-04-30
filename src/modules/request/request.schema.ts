@@ -21,6 +21,9 @@ export const REQUEST_TYPE_OPTIONS = [
 ] as const
 
 const requestTypeAliases: Record<string, z.infer<typeof RequestTypeSchema>> = {
+	exame: 'other',
+	procedimento: 'other',
+	interconsulta: 'consultation',
 	atestado_medico: 'medicalCertificate',
 	'atestado médico': 'medicalCertificate',
 	'atestado medico': 'medicalCertificate',

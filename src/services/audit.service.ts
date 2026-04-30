@@ -411,6 +411,25 @@ export class AuditService {
     })
   }
 
+  async logUtiVisitorInvite(
+    adminId: string,
+    patientId: string,
+    utiId: string,
+    whatsapp: string,
+    expiresAt: Date,
+    context: AuditContext
+  ): Promise<void> {
+    await this.log({
+      userId: adminId,
+      action: 'UTI_VISITOR_INVITE',
+      description: 'Enviou link temporario de visita ao leito de UTI',
+      content: { patientId, utiId, whatsapp, expiresAt: expiresAt.toISOString() },
+      impactLevel: ImpactLevel.HIGH,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    })
+  }
+
   /**
    * Logs de solicitações
    */

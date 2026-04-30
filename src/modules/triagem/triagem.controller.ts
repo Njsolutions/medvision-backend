@@ -6,6 +6,7 @@ import {
 	PatientIdSchema,
 } from '@/modules/triagem/triagem.schema'
 import { auditService } from '@/services/audit.service'
+import { realtimeService } from '@/services/realtime.service'
 import { ImpactLevel } from '@/types/audit.types'
 import { canAccessPatient, isAdminLike } from '@/utils/security/access-control'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
@@ -138,6 +139,8 @@ export class TriagemController {
 				})
 			}
 
+			this.broadcastTriagemEvent('triagem.created', triagem)
+
 			return res.status(201).send({
 				message: 'Triagem created successfully',
 				data: triagem,
@@ -191,6 +194,8 @@ export class TriagemController {
 				})
 			}
 
+			this.broadcastTriagemEvent('triagem.updated', updatedTriagem)
+
 			return res.status(200).send({
 				message: 'Triagem updated successfully',
 				data: updatedTriagem,
@@ -234,6 +239,8 @@ export class TriagemController {
 				})
 			}
 
+			this.broadcastTriagemEvent('triagem.deleted', existingTriagem)
+
 			return res.status(200).send({
 				message: 'Triagem deleted successfully',
 			})
@@ -241,5 +248,20 @@ export class TriagemController {
 			console.error('Error deleting triagem:', error)
 			return res.status(500).send({ error: 'Internal server error' })
 		}
+	}
+
+	private broadcastTriagemEvent(type: 'triagem.created' | 'triagem.updated' | 'triagem.deleted', triagem: {
+		id: string
+		patientId: string
+		appointmentId?: string | null
+	}) {
+		realtimeService.broadcast({
+			type,
+			data: {
+				triagemId: triagem.id,
+				patientId: triagem.patientId,
+				appointmentId: triagem.appointmentId,
+			},
+		})
 	}
 }

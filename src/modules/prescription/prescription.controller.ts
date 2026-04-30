@@ -13,6 +13,7 @@ import { prescriptionRepository } from './prescription.repository'
 import { auditService } from '@/services/audit.service'
 import { signatureRepository } from '@/repositories/signature.repository'
 import { pdfGeneratorService } from '@/services/pdf-generator.service'
+import { realtimeService } from '@/services/realtime.service'
 import { signatureService } from '@/services/signature.service'
 
 export class PrescriptionController {
@@ -138,6 +139,8 @@ export class PrescriptionController {
 			request.ip,
 			request.headers['user-agent'],
 		)
+
+		this.broadcastPrescriptionEvent('prescription.created', prescription)
 
 		return reply.status(201).send({
 			statusCode: 201,
@@ -267,8 +270,8 @@ export class PrescriptionController {
 			const data = updatePrescriptionSchema.parse(request.body)
 
 			// Verifica se a prescrição existe
-			const exists = await prescriptionRepository.exists(id)
-			if (!exists) {
+			const existingPrescription = await prescriptionRepository.findById(id)
+			if (!existingPrescription) {
 				return reply.status(404).send({
 					statusCode: 404,
 					error: 'Not Found',
@@ -287,6 +290,8 @@ export class PrescriptionController {
 				request.ip,
 				request.headers['user-agent'],
 			)
+
+			this.broadcastPrescriptionEvent('prescription.updated', prescription)
 
 			return reply.status(200).send({
 				statusCode: 200,
@@ -325,8 +330,8 @@ export class PrescriptionController {
 			const { id } = prescriptionParamsSchema.parse(request.params)
 
 			// Verifica se a prescrição existe
-			const exists = await prescriptionRepository.exists(id)
-			if (!exists) {
+			const existingPrescription = await prescriptionRepository.findById(id)
+			if (!existingPrescription) {
 				return reply.status(404).send({
 					statusCode: 404,
 					error: 'Not Found',
@@ -345,6 +350,8 @@ export class PrescriptionController {
 				request.ip,
 				request.headers['user-agent'],
 			)
+
+			this.broadcastPrescriptionEvent('prescription.deleted', existingPrescription)
 
 			return reply.status(200).send({
 				statusCode: 200,
@@ -568,6 +575,23 @@ export class PrescriptionController {
 				message: 'Erro ao assinar prescrição',
 			})
 		}
+	}
+
+	private broadcastPrescriptionEvent(type: 'prescription.created' | 'prescription.updated' | 'prescription.deleted', prescription: {
+		id: string
+		patientId: string
+		doctorId: string
+		appointmentId?: string | null
+	}) {
+		realtimeService.broadcast({
+			type,
+			data: {
+				prescriptionId: prescription.id,
+				patientId: prescription.patientId,
+				doctorId: prescription.doctorId,
+				appointmentId: prescription.appointmentId,
+			},
+		})
 	}
 }
 

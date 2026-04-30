@@ -20,11 +20,14 @@ export function realtimeRoutes(app: FastifyInstance) {
 			return
 		}
 
-		const unregister = realtimeService.register({
+		const client = {
 			socket,
 			userId: decoded.id,
 			role: decoded.role,
-		})
+			subscriptions: new Set<string>(),
+		}
+
+		const unregister = realtimeService.register(client)
 
 		socket.send(JSON.stringify({
 			type: 'connection.ready',
@@ -34,6 +37,27 @@ export function realtimeRoutes(app: FastifyInstance) {
 			},
 			sentAt: new Date().toISOString(),
 		}))
+
+		socket.on('message', (rawMessage: unknown) => {
+			try {
+				const messageText = Buffer.isBuffer(rawMessage)
+					? rawMessage.toString()
+					: String(rawMessage)
+
+				const message = JSON.parse(messageText) as {
+					type?: string
+					events?: unknown
+				}
+
+				if (message.type === 'subscribe' && Array.isArray(message.events)) {
+					client.subscriptions = new Set(
+						message.events.filter((event): event is string => typeof event === 'string')
+					)
+				}
+			} catch {
+				// Ignore invalid client messages. The socket can keep receiving broadcasts.
+			}
+		})
 
 		socket.on('close', unregister)
 	})

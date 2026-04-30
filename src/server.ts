@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import fastifyJwt from '@fastify/jwt'
 import { fastify } from 'fastify'
 import { fastifySwagger } from '@fastify/swagger'
@@ -73,6 +74,10 @@ server.register(fastifySwagger, {
 server.register(ScalarApiReference, { routePrefix: `/v${version}/docs` })
 
 server.addHook('onRequest', auditContextDecorator)
+
+server.get('/health', async () => {
+	return { status: 'ok' }
+})
 
 registerModules(server, version)
 

@@ -37,6 +37,6 @@ USER nodejs
 EXPOSE 3333
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "const port = process.env.PORT || 3333; require('http').get(\`http://127.0.0.1:\${port}/\`, () => process.exit(0)).on('error', () => process.exit(1))"
+  CMD node -e "const port = process.env.PORT || 3333; require('http').get(\`http://127.0.0.1:\${port}/health\`, () => process.exit(0)).on('error', () => process.exit(1))"
 
-CMD ["pnpm", "start"]
+CMD ["sh", "-c", "pnpm run db:migrate && pnpm start"]

@@ -1,7 +1,8 @@
 import { UtiRepository } from '@/modules/uti/uti.repository'
-import { CreateUtiSchema, UpdateUtiSchema, UtiIdSchema } from '@/modules/uti/uti.schema'
+import { CreateUtiSchema, UpdateUtiSchema, UtiIdSchema, UtiVisitorInviteSchema } from '@/modules/uti/uti.schema'
 import { auditService } from '@/services/audit.service'
 import { createDailyService } from '@/services/daily.service'
+import { realtimeService } from '@/services/realtime.service'
 import { canAccessUti, canManageUtiBed } from '@/utils/security/access-control'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
@@ -41,12 +42,15 @@ export class UtiController {
 					roomName: roomName,
 				})
 
+				this.broadcastUtiEvent('uti.created', updatedUti)
+
 				return res.status(201).send({
 					message: 'Empty UTI bed created successfully with video room',
 					data: updatedUti,
 				})
 			} catch (dailyError) {
 				console.error('Error creating Daily.co room for UTI bed:', dailyError)
+				this.broadcastUtiEvent('uti.created', uti)
 				// Retorna o leito mesmo sem a sala, mas alerta o erro
 				return res.status(201).send({
 					message: 'UTI bed created but failed to create video room',
@@ -122,6 +126,8 @@ export class UtiController {
 					await auditService.logUtiAdmission(req.user.id, data.data.patientId, finalUti.id, req.auditContext)
 				}
 			}
+
+			this.broadcastUtiEvent('uti.created', finalUti)
 
 			return res.status(201).send({
 				message: data.data.patientId
@@ -241,6 +247,8 @@ export class UtiController {
 					}
 				}
 			}
+
+			this.broadcastUtiEvent('uti.updated', updatedUti)
 
 			return res.status(200).send({
 				message: 'UTI bed updated successfully',
@@ -399,5 +407,110 @@ export class UtiController {
 			console.error('Error getting room token:', error)
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
+	}
+
+	async inviteVisitor(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (!req.user) {
+				return res.status(401).send({ error: 'NÃ£o autorizado' })
+			}
+
+			if (!(await canManageUtiBed(req.user))) {
+				return res.status(403).send({
+					error: 'PermissÃ£o insuficiente para iniciar visita de UTI',
+					message: 'Apenas administradores autorizados podem enviar links de visita',
+				})
+			}
+
+			const params = UtiIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'ID do leito de UTI invÃ¡lido', details: params.error })
+			}
+
+			const data = UtiVisitorInviteSchema.safeParse(req.body)
+
+			if (!data.success) {
+				return res.status(400).send({ error: 'Dados da requisiÃ§Ã£o invÃ¡lidos', details: data.error })
+			}
+
+			let uti = await this.utiRepository.findById(params.data.id)
+
+			if (!uti) {
+				return res.status(404).send({ error: 'Leito de UTI nÃ£o encontrado' })
+			}
+
+			if (uti.status !== 'occupied' || !uti.patientId || !uti.patient) {
+				return res.status(409).send({
+					error: 'Leito sem paciente internado',
+					message: 'A visita sÃ³ pode ser iniciada para leitos ocupados',
+				})
+			}
+
+			uti = await this.ensureRoom(uti)
+
+			if (!uti.roomLink || !uti.roomName) {
+				return res.status(500).send({ error: 'Sala de vÃ­deo indisponÃ­vel para este leito de UTI' })
+			}
+
+			const restrictedRoom = await this.dailyService.setRoomPrivacy(uti.roomName, 'private')
+			const roomUrl = restrictedRoom.url || uti.roomLink
+			const visitorToken = await this.dailyService.generateToken(uti.roomName, `visitor-${uti.id}`, 'patient', {
+				userName: 'Visitante',
+				expiresIn: 7200,
+			})
+			const tokenSeparator = roomUrl.includes('?') ? '&' : '?'
+			const accessUrl = `${roomUrl}${tokenSeparator}t=${encodeURIComponent(visitorToken)}`
+
+			return res.status(200).send({
+				message: 'Link de visita gerado',
+				data: {
+					utiId: uti.id,
+					bedNumber: uti.bedNumber,
+					accessUrl,
+				},
+			})
+		} catch (error) {
+			console.error('Error inviting UTI visitor:', error)
+			return res.status(500).send({ error: 'Erro interno do servidor' })
+		}
+	}
+
+	private async ensureRoom(uti: NonNullable<Awaited<ReturnType<UtiRepository['findById']>>>) {
+		if (uti.roomName && uti.roomLink) {
+			return uti
+		}
+
+		const roomName = uti.roomName || `uti-bed-${uti.id}`
+		try {
+			const room = await this.dailyService.createRoom(roomName, uti.id)
+			return this.utiRepository.update(uti.id, {
+				roomLink: room.url,
+				roomName: room.roomName,
+			})
+		} catch (createRoomError) {
+			const existingRoom = await this.dailyService.getRoom(roomName)
+			return this.utiRepository.update(uti.id, {
+				roomLink: existingRoom.url,
+				roomName,
+			})
+		}
+	}
+
+	private broadcastUtiEvent(type: 'uti.created' | 'uti.updated', uti: {
+		id: string
+		patientId: string | null
+		status: string
+		bedNumber: string
+	}) {
+		realtimeService.broadcast({
+			type,
+			data: {
+				utiId: uti.id,
+				patientId: uti.patientId,
+				status: uti.status,
+				bedNumber: uti.bedNumber,
+			},
+		})
 	}
 }

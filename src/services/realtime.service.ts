@@ -6,6 +6,7 @@ type RealtimeClient = {
 	}
 	userId: string
 	role?: string
+	subscriptions?: Set<string>
 }
 
 type RealtimeEvent = {
@@ -33,6 +34,8 @@ class RealtimeService {
 		})
 
 		for (const client of this.clients) {
+			if (!this.shouldReceiveEvent(client, event.type)) continue
+
 			if (client.socket.readyState === OPEN_STATE) {
 				client.socket.send(payload)
 			} else {
@@ -49,6 +52,7 @@ class RealtimeService {
 
 		for (const client of this.clients) {
 			if (client.userId !== userId) continue
+			if (!this.shouldReceiveEvent(client, event.type)) continue
 
 			if (client.socket.readyState === OPEN_STATE) {
 				client.socket.send(payload)
@@ -60,6 +64,10 @@ class RealtimeService {
 
 	getConnectedClientsCount() {
 		return this.clients.size
+	}
+
+	private shouldReceiveEvent(client: RealtimeClient, eventType: string) {
+		return !client.subscriptions?.size || client.subscriptions.has(eventType)
 	}
 }
 

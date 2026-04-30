@@ -7,6 +7,7 @@ import {
 	getAnamnesesByDoctorSchema,
 } from '@/modules/anamnese/anamnese.schema';
 import { auditService } from '@/services/audit.service';
+import { realtimeService } from '@/services/realtime.service';
 import { ImpactLevel } from '@/types/audit.types';
 import { signatureService } from '@/services/signature.service';
 import { signatureRepository } from '@/repositories/signature.repository';
@@ -114,6 +115,8 @@ export class AnamneseController {
 			ipAddress: req.ip,
 			userAgent: req.headers['user-agent'],
 		});
+
+		this.broadcastAnamneseEvent('anamnese.created', anamnese);
 
 		return res.status(201).send({
 				message: 'Anamnese criada e assinada com sucesso',
@@ -289,6 +292,8 @@ export class AnamneseController {
 				userAgent: req.headers['user-agent'],
 			});
 
+			this.broadcastAnamneseEvent('anamnese.updated', anamnese);
+
 			return res.status(200).send({
 				message: 'Anamnese atualizada com sucesso',
 				data: anamnese,
@@ -332,6 +337,8 @@ export class AnamneseController {
 				ipAddress: req.ip,
 				userAgent: req.headers['user-agent'],
 			});
+
+			this.broadcastAnamneseEvent('anamnese.deleted', existingAnamnese);
 
 			return res.status(200).send({
 				message: 'Anamnese deletada com sucesso',
@@ -575,5 +582,22 @@ export class AnamneseController {
 			console.error('Error verifying integrity:', error);
 			return res.status(500).send({ error: 'Erro ao verificar integridade' });
 		}
+	}
+
+	private broadcastAnamneseEvent(type: 'anamnese.created' | 'anamnese.updated' | 'anamnese.deleted', anamnese: {
+		id: string;
+		patientId: string;
+		doctorId: string;
+		appointmentId?: string | null;
+	}) {
+		realtimeService.broadcast({
+			type,
+			data: {
+				anamneseId: anamnese.id,
+				patientId: anamnese.patientId,
+				doctorId: anamnese.doctorId,
+				appointmentId: anamnese.appointmentId,
+			},
+		});
 	}
 }

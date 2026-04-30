@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { patientFileRepository } from '@/modules/patientfile/patientfile.repository'
 import { storageService } from '@/services/storage.service'
 import { auditService } from '@/services/audit.service'
+import { realtimeService } from '@/services/realtime.service'
 import { canAccessPatient, isAdminLike, isDoctor } from '@/utils/security/access-control'
 import {
 	UploadFileSchema,
@@ -133,6 +134,8 @@ export class PatientFileController {
 				ipAddress: req.ip,
 				userAgent: req.headers['user-agent'],
 			})
+
+			this.broadcastPatientFileEvent('patientFile.created', file)
 
 			console.log('🎉 Upload completed successfully!')
 			return res.status(201).send({
@@ -288,6 +291,8 @@ export class PatientFileController {
 				userAgent: req.headers['user-agent'],
 			})
 
+			this.broadcastPatientFileEvent('patientFile.deleted', file)
+
 			return res.status(200).send({
 				message: 'File deleted successfully',
 			})
@@ -391,5 +396,22 @@ export class PatientFileController {
 			console.error('Error downloading file:', error)
 			return res.status(500).send({ error: 'Failed to download file' })
 		}
+	}
+
+	private broadcastPatientFileEvent(type: 'patientFile.created' | 'patientFile.deleted', file: {
+		id: string
+		patientId: string
+		fileName: string
+		fileType: string
+	}) {
+		realtimeService.broadcast({
+			type,
+			data: {
+				fileId: file.id,
+				patientId: file.patientId,
+				fileName: file.fileName,
+				fileType: file.fileType,
+			},
+		})
 	}
 }
