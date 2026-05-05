@@ -3,17 +3,14 @@ import type { CreateUtiInput, UpdateUtiInput } from '@/modules/uti/uti.schema'
 
 export class UtiRepository {
 	private async getNextBedNumber() {
-		const lastBed = await db.uti.findFirst({
-			orderBy: {
-				bedNumber: 'desc',
-			},
-			select: {
-				bedNumber: true,
-			},
-		})
+		const allBeds = await db.uti.findMany({ select: { bedNumber: true } })
 
-		const lastNumber = Number.parseInt(lastBed?.bedNumber || '100', 10)
-		return String(Number.isNaN(lastNumber) ? 101 : lastNumber + 1)
+		const maxNumber = allBeds.reduce((max, bed) => {
+			const n = Number.parseInt(bed.bedNumber, 10)
+			return Number.isNaN(n) ? max : Math.max(max, n)
+		}, 100)
+
+		return String(maxNumber + 1)
 	}
 
 	async findById(id: string) {

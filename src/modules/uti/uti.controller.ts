@@ -60,7 +60,12 @@ export class UtiController {
 			}
 		} catch (error) {
 			console.error('Error creating empty UTI bed:', error)
-			return res.status(500).send({ error: 'Erro interno do servidor' })
+			return res.status(500).send({
+				error: 'Erro interno do servidor',
+				...(process.env.NODE_ENV !== 'production' && {
+					details: error instanceof Error ? error.message : String(error),
+				}),
+			})
 		}
 	}
 

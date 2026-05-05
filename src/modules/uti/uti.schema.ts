@@ -3,7 +3,6 @@ import { z } from 'zod'
 export const CreateUtiSchema = z.object({
 	patientId: z.string().uuid('Invalid patient ID').optional().nullable(),
 	status: z.enum(['available', 'occupied', 'disinfecting']).default('available'),
-	// roomLink removido do schema pois será gerado automaticamente
 })
 
 export const UpdateUtiSchema = z.object({
