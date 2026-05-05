@@ -2,12 +2,10 @@ interface RateLimitConfig {
 	windowMs: number
 	maxRequests: number
 }
-
 interface RequestLog {
 	timestamp: number
 	count: number
 }
-
 export function createRateLimitService() {
 	const store = new Map<string, RequestLog>()
 
@@ -29,9 +27,12 @@ export function createRateLimitService() {
 			return false
 		}
 
-		log.count++
+		if (log.count >= config.maxRequests) {
+			return true
+		}
 
-		return log.count > config.maxRequests
+		log.count++
+		return false
 	}
 
 	function reset(identifier: string): void {
@@ -41,35 +42,35 @@ export function createRateLimitService() {
 	function checkGeneralLimit(identifier: string): boolean {
 		return isLimited(identifier, {
 			windowMs: 15 * 60 * 1000,
-			maxRequests: 100,
+			maxRequests: 150,
 		})
 	}
 
 	function checkLoginLimit(identifier: string): boolean {
 		return isLimited(identifier, {
 			windowMs: 15 * 60 * 1000,
-			maxRequests: 5,
+			maxRequests: 15,
 		})
 	}
 
 	function check2FALimit(identifier: string): boolean {
 		return isLimited(identifier, {
 			windowMs: 10 * 60 * 1000,
-			maxRequests: 3,
+			maxRequests: 15,
 		})
 	}
 
 	function checkVerificationLimit(identifier: string): boolean {
 		return isLimited(identifier, {
 			windowMs: 60 * 60 * 1000,
-			maxRequests: 3,
+			maxRequests: 15,
 		})
 	}
 
 	function checkPasswordResetLimit(identifier: string): boolean {
 		return isLimited(identifier, {
 			windowMs: 60 * 60 * 1000,
-			maxRequests: 5,
+			maxRequests: 15,
 		})
 	}
 
