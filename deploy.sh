@@ -29,6 +29,11 @@ if ! docker compose version > /dev/null 2>&1; then
     exit 1
 fi
 
+if ! docker network inspect root_default > /dev/null 2>&1; then
+    echo -e "${BLUE}Creating external network root_default...${NC}"
+    docker network create root_default
+fi
+
 echo -e "${BLUE}Pulling latest code from origin/main...${NC}"
 git fetch origin
 git pull --ff-only origin main
