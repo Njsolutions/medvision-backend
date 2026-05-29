@@ -15,6 +15,7 @@ ARG DATABASE_URL=postgresql://user:pass@localhost:5432/db
 ENV DATABASE_URL=$DATABASE_URL
 RUN pnpm run db:generate
 RUN pnpm run build
+RUN pnpm prune --prod
 
 FROM node:20-alpine
 
@@ -24,10 +25,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
-
-RUN pnpm install --frozen-lockfile --prod
-
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
 

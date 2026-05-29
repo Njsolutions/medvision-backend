@@ -87,6 +87,9 @@ importers:
       postgres:
         specifier: ^3.4.7
         version: 3.4.9
+      prisma:
+        specifier: ^6.19.0
+        version: 6.19.3(typescript@5.9.3)
       resend:
         specifier: ^6.12.2
         version: 6.12.2
@@ -115,9 +118,6 @@ importers:
       '@types/pg':
         specifier: ^8.15.6
         version: 8.20.0
-      prisma:
-        specifier: ^6.19.0
-        version: 6.19.3(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
