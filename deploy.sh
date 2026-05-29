@@ -60,9 +60,6 @@ for i in $(seq 1 24); do
     sleep 5
 done
 
-echo -e "${BLUE}Ensuring initial admin exists...${NC}"
-$COMPOSE exec -T app pnpm run db:seed:admin
-
 echo -e "${BLUE}Cleaning up unused Docker resources...${NC}"
 docker image prune -f
 docker container prune -f
