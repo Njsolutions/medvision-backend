@@ -31,9 +31,9 @@ services:
       - "traefik.http.services.medvision-api.loadbalancer.server.port=3333"
       - "traefik.docker.network=web"
     networks:
-      - root_default
+      - web
     restart: unless-stopped
 
 networks:
-  root_default:
+  web:
     external: true
