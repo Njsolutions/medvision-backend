@@ -25,11 +25,11 @@ services:
       FRONTEND_URL: ${FRONTEND_URL}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.medvision-api.rule=Host(`medvision.njsolutions.com.br`)"
+      - "traefik.http.routers.medvision-api.rule=Host(`${API_DOMAIN}`)"
       - "traefik.http.routers.medvision-api.entrypoints=websecure"
       - "traefik.http.routers.medvision-api.tls.certresolver=mytlschallenge"
       - "traefik.http.services.medvision-api.loadbalancer.server.port=3333"
-      - "traefik.docker.network=root_default"
+      - "traefik.docker.network=web"
     networks:
       - root_default
     restart: unless-stopped
