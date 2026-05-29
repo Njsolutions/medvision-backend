@@ -3,17 +3,11 @@
 set -euo pipefail
 
 GREEN='\033[0;32m'
-<<<<<<< HEAD
 BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
 COMPOSE="docker compose -f docker-compose.prod.yml"
-=======
-BLUE='\033[0;34m' 
-RED='\033[0;31m' 
-NC='\033[0m' 
->>>>>>> 83fcdd5f9262df73efd1be344af7022dff452467
 
 echo -e "${BLUE}Starting MedVision Backend deploy...${NC}"
 
