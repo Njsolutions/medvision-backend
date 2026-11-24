@@ -24,6 +24,7 @@ export class AdminRepository {
 	}
 
 	async create(data: CreateAdminInput & { password: string }) {
+		// Master também ganha a linha em `admins`: é ela que o módulo lista, edita e controla o acesso à UTI.
 		return db.admin.create({
 			data: {
 				utiAccess: data.utiAccess,
@@ -34,7 +35,8 @@ export class AdminRepository {
 						phone: data.phone,
 						email: data.email,
 						password: data.password,
-						role: 'admin',
+						role: data.role,
+						...(data.role === 'master' && { master: { create: {} } }),
 					},
 				},
 			},

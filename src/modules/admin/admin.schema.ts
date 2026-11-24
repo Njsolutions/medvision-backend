@@ -6,6 +6,8 @@ export const CreateAdminSchema = z.object({
 	phone: z.string().min(10, 'Phone number is required'),
 	email: z.string().email('Invalid email address'),
 	utiAccess: z.boolean().default(false),
+	// Só `master` pode cadastrar outro `master`; o controller valida via canCreateRole.
+	role: z.enum(['admin', 'master']).default('admin'),
 })
 
 export const UpdateAdminSchema = z.object({

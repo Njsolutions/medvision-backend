@@ -3,6 +3,7 @@ import { CreateAdminSchema, UpdateAdminSchema, AdminIdSchema } from '@/modules/a
 import { CryptoService } from '@/services/crypto.service'
 import { sendFirstAccess } from '@/services/first-access.service'
 import { auditService } from '@/services/audit.service'
+import { canCreateRole } from '@/utils/security/role-policy'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 export class AdminController {
@@ -24,6 +25,10 @@ export class AdminController {
 
 			if (!data.success) {
 				return res.status(400).send({ error: 'Invalid request data', details: data.error })
+			}
+
+			if (!canCreateRole(req.user?.role, data.data.role)) {
+				return res.status(403).send({ error: 'Insufficient permissions to create a user with this role' })
 			}
 
 			const cpfExists = await this.adminRepository.checkCpfExists(data.data.cpf)
@@ -51,7 +56,7 @@ export class AdminController {
 				await auditService.logUserCreate(
 					req.user.id,
 					admin.id,
-					'admin',
+					data.data.role,
 					req.auditContext
 				)
 			}
@@ -87,6 +92,11 @@ export class AdminController {
 
 			if (!existingAdmin) {
 				return res.status(404).send({ error: 'Admin not found' })
+			}
+
+			// A exclusão remove só a linha em `admins`; num master isso deixaria um master órfão com acesso.
+			if (existingAdmin.user.role === 'master') {
+				return res.status(403).send({ error: 'Master users cannot be deleted' })
 			}
 
 			await this.adminRepository.delete(params.data.id)
@@ -154,6 +164,11 @@ export class AdminController {
 
 			if (!existingAdmin) {
 				return res.status(404).send({ error: 'Admin not found' })
+			}
+
+			// Admin não altera dados de master (e-mail alterado + reset de senha = tomada da conta).
+			if (existingAdmin.user.role === 'master' && req.user?.role !== 'master') {
+				return res.status(403).send({ error: 'Insufficient permissions to update a master user' })
 			}
 
 			if (data.data.email && data.data.email !== existingAdmin.user.email) {
