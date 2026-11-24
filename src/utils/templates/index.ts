@@ -13,6 +13,7 @@ export { prescriptionReadyTemplate } from './prescription.template'
 export {
 	welcomePatientTemplate,
 	welcomeDoctorTemplate,
+	welcomeAdminTemplate,
 } from './welcome.templates'
 
 // Templates de Autenticação
@@ -23,5 +24,15 @@ export {
 	passwordRecoveryCodeTemplate,
 } from './auth.templates'
 
-// Template Base
-export { baseTemplate } from './base.template'
+// Layout padrão e blocos
+export {
+	emailLayout,
+	paragraph,
+	heading,
+	codeBox,
+	detailsBox,
+	notice,
+	bulletList,
+	button,
+	linkFallback,
+} from './base.template'

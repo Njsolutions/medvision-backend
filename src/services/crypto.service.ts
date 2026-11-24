@@ -26,6 +26,11 @@ export class CryptoService {
 		}
 	}
 
+	// Hash de uma senha aleatória descartada. O usuário só entra depois de definir a própria senha pelo link de primeiro acesso.
+	async hashUnusablePassword(): Promise<string> {
+		return this.hashPassword(crypto.randomBytes(32).toString('base64url'))
+	}
+
 	async comparePassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
 		try {
 			return await bcrypt.compare(plainPassword, hashedPassword)

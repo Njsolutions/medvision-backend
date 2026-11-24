@@ -1,6 +1,7 @@
-import { auditLogRepository } from '@/modules/auditlog/auditlog.repository'
+import { auditLogRepository, type AuditLogFilters } from '@/modules/auditlog/auditlog.repository'
 import type { AuditLogData, AuditContext } from '../types/audit.types'
 import { ImpactLevel } from '../types/audit.types'
+import { logger } from '@/lib/logger'
 
 export class AuditService {
   /**
@@ -11,7 +12,7 @@ export class AuditService {
       await auditLogRepository.create(data)
     } catch (error) {
       // Não deve falhar a operação principal se o log falhar
-      console.error('Erro ao registrar log de auditoria:', error)
+      logger.error({ err: error }, 'Erro ao registrar log de auditoria')
     }
   }
 
@@ -540,63 +541,26 @@ export class AuditService {
   }
 
   /**
-   * Busca logs com filtros
+   * Busca logs com filtros combinados
    */
-  async getLogs(filters: {
-    userId?: string
-    action?: string
-    impactLevel?: string
-    startDate?: Date
-    endDate?: Date
-    limit?: number
-    offset?: number
-  }) {
-    const limit = filters.limit || 50
-    const offset = filters.offset || 0
-
-    if (filters.userId) {
-      return await auditLogRepository.findByUserId(
-        filters.userId,
-        limit,
-        offset
-      )
-    }
-
-    if (filters.action) {
-      return await auditLogRepository.findByAction(filters.action, limit, offset)
-    }
-
-    if (filters.impactLevel) {
-      return await auditLogRepository.findByImpactLevel(
-        filters.impactLevel,
-        limit,
-        offset
-      )
-    }
-
-    if (filters.startDate && filters.endDate) {
-      return await auditLogRepository.findByDateRange(
-        filters.startDate,
-        filters.endDate,
-        limit,
-        offset
-      )
-    }
-
-    return await auditLogRepository.findAll(limit, offset)
+  async getLogs(filters: AuditLogFilters & { limit?: number; offset?: number }) {
+    const { limit = 50, offset = 0, ...where } = filters
+    return await auditLogRepository.findMany(where, limit, offset)
   }
 
   /**
-   * Conta logs com filtros
+   * Conta logs com filtros combinados
    */
-  async countLogs(filters: {
-    userId?: string
-    action?: string
-    impactLevel?: string
-    startDate?: Date
-    endDate?: Date
-  }): Promise<number> {
+  async countLogs(filters: AuditLogFilters = {}): Promise<number> {
     return await auditLogRepository.count(filters)
+  }
+
+  async countByImpactLevel() {
+    return await auditLogRepository.countByImpactLevel()
+  }
+
+  async listActions(): Promise<string[]> {
+    return await auditLogRepository.listActions()
   }
 }
 

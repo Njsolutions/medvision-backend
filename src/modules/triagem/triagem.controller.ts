@@ -7,9 +7,11 @@ import {
 } from '@/modules/triagem/triagem.schema'
 import { auditService } from '@/services/audit.service'
 import { realtimeService } from '@/services/realtime.service'
+import { doctorIdsForPatient } from '@/services/realtime-audience'
 import { ImpactLevel } from '@/types/audit.types'
 import { canAccessPatient, isAdminLike } from '@/utils/security/access-control'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import { logger } from '@/lib/logger'
 
 export class TriagemController {
 	private triagemRepository: TriagemRepository
@@ -31,7 +33,7 @@ export class TriagemController {
 				data: triagens,
 			})
 		} catch (error) {
-			console.error('Error retrieving triagens:', error)
+			req.log.error({ err: error }, 'Error retrieving triagens')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -59,7 +61,7 @@ export class TriagemController {
 				data: triagem,
 			})
 		} catch (error) {
-			console.error('Error retrieving triagem:', error)
+			req.log.error({ err: error }, 'Error retrieving triagem')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -83,7 +85,7 @@ export class TriagemController {
 				data: triagens,
 			})
 		} catch (error) {
-			console.error('Error retrieving triagens by patient:', error)
+			req.log.error({ err: error }, 'Error retrieving triagens by patient')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -146,7 +148,7 @@ export class TriagemController {
 				data: triagem,
 			})
 		} catch (error) {
-			console.error('Error creating triagem:', error)
+			req.log.error({ err: error }, 'Error creating triagem')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -201,7 +203,7 @@ export class TriagemController {
 				data: updatedTriagem,
 			})
 		} catch (error) {
-			console.error('Error updating triagem:', error)
+			req.log.error({ err: error }, 'Error updating triagem')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -245,7 +247,7 @@ export class TriagemController {
 				message: 'Triagem deleted successfully',
 			})
 		} catch (error) {
-			console.error('Error deleting triagem:', error)
+			req.log.error({ err: error }, 'Error deleting triagem')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -255,13 +257,20 @@ export class TriagemController {
 		patientId: string
 		appointmentId?: string | null
 	}) {
-		realtimeService.broadcast({
-			type,
-			data: {
-				triagemId: triagem.id,
-				patientId: triagem.patientId,
-				appointmentId: triagem.appointmentId,
-			},
-		})
+		void doctorIdsForPatient(triagem.patientId)
+			.then((doctorIds) => {
+				realtimeService.publish(
+					{
+						type,
+						data: {
+							triagemId: triagem.id,
+							patientId: triagem.patientId,
+							appointmentId: triagem.appointmentId,
+						},
+					},
+					{ patientId: triagem.patientId, doctorIds },
+				)
+			})
+			.catch((error) => logger.error({ err: error }, 'Error publishing triagem event'))
 	}
 }

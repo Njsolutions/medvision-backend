@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger'
 export interface DailyService {
 	createRoom(
 		roomName: string,
@@ -79,7 +80,7 @@ export function createDailyService(): DailyService {
 			const responseText = await response.text()
 
 			if (!response.ok) {
-				console.error('Erro ao criar sala Daily:', responseText)
+				logger.error({ status: response.status }, 'Erro ao criar sala Daily')
 				throw new DailyApiError(
 					`Erro ao criar sala Daily: ${response.status} ${response.statusText}`,
 					response.status,
@@ -96,7 +97,7 @@ export function createDailyService(): DailyService {
 				roomName: room.name,
 			}
 		} catch (error) {
-			console.error('❌ Erro ao criar sala:', error)
+			logger.error({ err: error }, '❌ Erro ao criar sala')
 			if (error instanceof DailyApiError) {
 				throw error
 			}
@@ -152,7 +153,7 @@ export function createDailyService(): DailyService {
 			const responseText = await response.text()
 
 			if (!response.ok) {
-				console.error('Erro ao atualizar privacidade da sala Daily:', responseText)
+				logger.error({ status: response.status }, 'Erro ao atualizar privacidade da sala Daily')
 				throw new DailyApiError(
 					`Erro ao atualizar sala Daily: ${response.status} ${response.statusText}`,
 					response.status,
@@ -167,7 +168,7 @@ export function createDailyService(): DailyService {
 				roomName: room.name,
 			}
 		} catch (error) {
-			console.error('Falha ao atualizar privacidade da sala Daily:', error)
+			logger.error({ err: error }, 'Falha ao atualizar privacidade da sala Daily')
 			if (error instanceof DailyApiError) {
 				throw error
 			}
@@ -188,13 +189,6 @@ export function createDailyService(): DailyService {
 			// Apenas médicos e admins são proprietários
 			const isOwner = userRole === 'doctor' || userRole === 'admin'
 
-			console.log('Gerando token com dados:', {
-				roomName,
-				userId: String(userId),
-				user_name: options?.userName || 'Usuário',
-				isOwner,
-				expiresIn: options?.expiresIn || 3600,
-			})
 
 			const tokenProperties: Record<string, unknown> = {
 				room_name: roomName,
@@ -230,23 +224,21 @@ export function createDailyService(): DailyService {
 			})
 
 			const responseText = await response.text()
-			console.log('Resposta Daily.co:', response.status, responseText)
 
 			if (!response.ok) {
-				console.error('Erro ao gerar token Daily:', responseText)
+				logger.error({ status: response.status }, 'Erro ao gerar token Daily')
 				throw new Error(`Erro ao gerar token: ${response.statusText} - ${responseText}`)
 			}
 
 			const data = JSON.parse(responseText)
 			if (!data.token) {
-				console.error('Token não encontrado na resposta:', data)
+				logger.error('Token não retornado pela API Daily')
 				throw new Error(`Token não retornado pela API Daily: ${JSON.stringify(data)}`)
 			}
 
-			console.log('Token gerado com sucesso')
 			return data.token
 		} catch (error) {
-			console.error('Falha ao gerar token Daily:', error)
+			logger.error({ err: error }, 'Falha ao gerar token Daily')
 			throw new Error(`Falha ao gerar token Daily: ${error}`)
 		}
 	}

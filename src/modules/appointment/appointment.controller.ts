@@ -19,6 +19,7 @@ import { realtimeService } from '@/services/realtime.service'
 import { validateDoctorAvailability, formatWeeklyAvailability } from '@/utils/functions/availability'
 import { canAccessAppointment, isAdminLike, isDoctor as hasDoctorRole, isPatient as hasPatientRole } from '@/utils/security/access-control'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import { logger } from '@/lib/logger'
 
 export class AppointmentController {
 	private appointmentRepository: AppointmentRepository
@@ -102,16 +103,6 @@ export class AppointmentController {
 
 	const appointmentDate = new Date(data.data.appointmentDate)
 	
-	console.log('🔍 Validando disponibilidade do médico:', {
-		doctorId: data.data.doctorId,
-		doctorName: doctorExists.user.name,
-		appointmentDate: appointmentDate.toISOString(),
-		localDate: appointmentDate.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-		dayOfWeek: appointmentDate.getDay(),
-		hours: appointmentDate.getHours(),
-		minutes: appointmentDate.getMinutes(),
-		weeklyAvailability: doctorExists.weeklyAvailability
-	})
 	
 	const availabilityCheck = validateDoctorAvailability(
 		doctorExists.weeklyAvailability,
@@ -121,7 +112,6 @@ export class AppointmentController {
 
 	if (!availabilityCheck.isAvailable) {
 		const schedule = formatWeeklyAvailability(doctorExists.weeklyAvailability)
-		console.log('❌ Médico indisponível:', availabilityCheck.message)
 		return res.status(400).send({ 
 			error: 'Horário indisponível',
 			message: availabilityCheck.message,
@@ -130,7 +120,6 @@ export class AppointmentController {
 		})
 	}
 
-	console.log('✅ Médico disponível no horário solicitado')
 
 	// Verificar conflitos de horário
 			const conflict = await this.appointmentRepository.checkConflict(
@@ -149,11 +138,6 @@ export class AppointmentController {
 				minute: '2-digit'
 			})
 			
-			console.log('❌ Conflito de horário detectado:', {
-				conflictType,
-				conflictingAppointmentId: conflict.id,
-				conflictTime
-			})
 			
 			return res.status(409).send({ 
 				error: 'Conflito de horário',
@@ -174,7 +158,7 @@ export class AppointmentController {
 			try {
 				dailyRoom = await this.dailyService.createRoom(roomName, 'temp-id')
 			} catch (error) {
-				console.error('Error creating Daily.co room:', error)
+				logger.error({ err: error }, 'Error creating Daily.co room')
 				return res.status(500).send({ 
 					error: 'Erro ao criar sala de vídeo',
 					message: 'Não foi possível criar a sala de vídeo para a consulta'
@@ -217,7 +201,7 @@ export class AppointmentController {
 				)
 			}
 		} catch (error) {
-			console.error('Error generating tokens:', error)
+			logger.error({ err: error }, 'Error generating tokens')
 		}
 
 			// Registra a criação da consulta no log de auditoria
@@ -240,16 +224,19 @@ export class AppointmentController {
 				},
 			}
 
-			realtimeService.broadcast({
-				type: 'appointment.created',
-				data: {
-					appointmentId: appointment.id,
-					patientId: appointment.patientId,
-					doctorId: appointment.doctorId,
-					status: appointment.status,
-					appointmentDate: appointment.appointmentDate,
+			realtimeService.publish(
+				{
+					type: 'appointment.created',
+					data: {
+						appointmentId: appointment.id,
+						patientId: appointment.patientId,
+						doctorId: appointment.doctorId,
+						status: appointment.status,
+						appointmentDate: appointment.appointmentDate,
+					},
 				},
-			})
+				{ patientId: appointment.patientId, doctorIds: [appointment.doctorId] },
+			)
 
 			return res.status(201).send({
 				message: 'Consulta criada com sucesso',
@@ -261,7 +248,7 @@ export class AppointmentController {
 				},
 			})
 		} catch (error) {
-			console.error('Error creating appointment:', error)
+			logger.error({ err: error }, 'Error creating appointment')
 			return res.status(500).send({ 
 				error: 'Erro interno do servidor',
 				message: 'Ocorreu um erro ao criar a consulta. Tente novamente.'
@@ -360,7 +347,6 @@ export class AppointmentController {
 				if (newDate.getTime() !== oldDate.getTime()) {
 					// Não recriar a sala quando a data muda - apenas manter a sala existente
 					// Isso evita problemas de mismatch de tokens/sala
-					console.log(`Data da consulta alterada de ${oldDate} para ${newDate}, mantendo sala existente: ${existingAppointment.roomName}`);
 				}
 			}
 			// Verificar se a consulta está sendo finalizada (cancelada, noShow ou completed)
@@ -369,9 +355,8 @@ export class AppointmentController {
 				if (existingAppointment.roomName) {
 					try {
 						await this.dailyService.deleteRoom(existingAppointment.roomName);
-						console.log(`Room ${existingAppointment.roomName} deleted for appointment ${params.data.id}`);
 					} catch (error) {
-						console.error('Error deleting room on appointment finalization:', error);
+						req.log.error({ err: error }, 'Error deleting room on appointment finalization');
 					}
 				}
 			}
@@ -381,16 +366,19 @@ export class AppointmentController {
 			// Registra a atualização da consulta no log de auditoria
 			if (req.user?.id && req.auditContext) {
 				// Verificar qual tipo de atualização foi feita
-				realtimeService.broadcast({
-					type: 'appointment.updated',
-					data: {
-						appointmentId: updatedAppointment.id,
-						patientId: updatedAppointment.patientId,
-						doctorId: updatedAppointment.doctorId,
-						status: updatedAppointment.status,
-						appointmentDate: updatedAppointment.appointmentDate,
+				realtimeService.publish(
+					{
+						type: 'appointment.updated',
+						data: {
+							appointmentId: updatedAppointment.id,
+							patientId: updatedAppointment.patientId,
+							doctorId: updatedAppointment.doctorId,
+							status: updatedAppointment.status,
+							appointmentDate: updatedAppointment.appointmentDate,
+						},
 					},
-				})
+					{ patientId: updatedAppointment.patientId, doctorIds: [updatedAppointment.doctorId] },
+				)
 				if (data.data.status === 'cancelled') {
 					await auditService.logAppointmentCancel(
 						req.user.id,
@@ -426,7 +414,7 @@ export class AppointmentController {
 				},
 			});
 		} catch (error) {
-			console.error('Error updating appointment:', error);
+			req.log.error({ err: error }, 'Error updating appointment');
 			return res.status(500).send({
 				error: 'Erro interno do servidor',
 				message: 'Ocorreu um erro ao atualizar a consulta. Tente novamente.'
@@ -604,7 +592,7 @@ async list(req: FastifyRequest, res: FastifyReply) {
 								...(adminToken && { adminToken }),
 							}
 						} catch (error) {
-							console.error('Error generating tokens for appointment:', appointment.id, error)
+							req.log.error({ err: error, appointmentId: appointment.id }, 'Error generating tokens for appointment')
 							roomData = { roomUrl }
 						}
 					} else {
@@ -629,7 +617,7 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				...(isDoctor && doctorProfile?.utiAccess && { utiAccess }),
 			})
 		} catch (error) {
-			console.error('Error listing appointments:', error)
+			req.log.error({ err: error }, 'Error listing appointments')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -686,7 +674,7 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				data: updatedAppointment,
 			})
 		} catch (error) {
-			console.error('Error adding patient feedback:', error)
+			req.log.error({ err: error }, 'Error adding patient feedback')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -743,7 +731,7 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				data: updatedAppointment,
 			})
 		} catch (error) {
-			console.error('Error adding doctor feedback:', error)
+			req.log.error({ err: error }, 'Error adding doctor feedback')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -773,7 +761,7 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				message: 'Expired appointments cancellation executed successfully',
 			})
 		} catch (error) {
-			console.error('Error canceling expired appointments:', error)
+			req.log.error({ err: error }, 'Error canceling expired appointments')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -846,11 +834,11 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				data: responseData,
 			})
 		} catch (tokenError) {
-			console.error('Error generating Daily.co token:', tokenError)
+			req.log.error({ err: tokenError }, 'Error generating Daily.co token')
 			return res.status(500).send({ error: 'Failed to generate access token' })
 		}
 		} catch (error) {
-			console.error('Error getting room token:', error)
+			req.log.error({ err: error }, 'Error getting room token')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -930,7 +918,7 @@ async list(req: FastifyRequest, res: FastifyReply) {
 				},
 			})
 		} catch (error) {
-			console.error('Erro ao gerar PDF completo da consulta:', error)
+			req.log.error({ err: error }, 'Erro ao gerar PDF completo da consulta')
 			return res.status(500).send({
 				error: 'Erro interno do servidor',
 				message: 'Não foi possível gerar o PDF da consulta',

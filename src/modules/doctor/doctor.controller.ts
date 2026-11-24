@@ -2,7 +2,7 @@ import { DoctorRepository } from '@/modules/doctor/doctor.repository'
 import { CreateDoctorSchema, UpdateDoctorSchema, DoctorIdSchema } from '@/modules/doctor/doctor.schema'
 import { CryptoService } from '@/services/crypto.service'
 import { auditService } from '@/services/audit.service'
-import { emailService } from '@/services/email.service'
+import { sendFirstAccess } from '@/services/first-access.service'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export class DoctorController {
@@ -44,8 +44,8 @@ export class DoctorController {
 				return res.status(409).send({ error: 'CRM already registered' })
 			}
 
-			const generatedPassword = this.cryptoService.generateRandomCode(8)
-			const hashedPassword = await this.cryptoService.hashPassword(generatedPassword)
+			// Ninguém conhece esta senha: o médico define a própria pelo link enviado por e-mail.
+			const hashedPassword = await this.cryptoService.hashUnusablePassword()
 
 			const doctor = await this.doctorRepository.create({
 				...data.data,
@@ -62,29 +62,18 @@ export class DoctorController {
 				)
 			}
 
-			// Envia email de boas-vindas com as credenciais de acesso
-			try {
-				const loginUrl = process.env.FRONTEND_URL || 'https://medvision.com/login'
-				await emailService.sendWelcomeDoctor(doctor.user.email, {
-					name: doctor.user.name,
-					email: doctor.user.email,
-					loginUrl,
-					temporaryPassword: generatedPassword,
-				})
-			} catch (emailError) {
-				console.error('Error sending welcome email:', emailError)
-				// Continua mesmo se o email falhar
-			}
+			// E-mail de boas-vindas com link de uso único para definir a senha (sem senha em texto puro).
+			const firstAccessEmailSent = await sendFirstAccess(doctor.user, 'doctor')
 
 			return res.status(201).send({
 				message: 'Doctor created successfully',
 				data: {
 					doctor,
-					temporaryPassword: generatedPassword,
+					firstAccessEmailSent,
 				},
 			})
 		} catch (error) {
-			console.error('Error creating doctor:', error)
+			req.log.error({ err: error }, 'Error creating doctor')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -146,7 +135,7 @@ export class DoctorController {
 				data: updatedDoctor,
 			})
 		} catch (error) {
-			console.error('Error updating doctor:', error)
+			req.log.error({ err: error }, 'Error updating doctor')
 				return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -170,7 +159,7 @@ export class DoctorController {
 				pagination: result.pagination,
 			})
 		} catch (error) {
-			console.error('Error listing doctors:', error)
+			req.log.error({ err: error }, 'Error listing doctors')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -198,7 +187,7 @@ export class DoctorController {
 				data: doctor,
 			})
 		} catch (error) {
-			console.error('Error fetching doctor:', error)
+			req.log.error({ err: error }, 'Error fetching doctor')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}

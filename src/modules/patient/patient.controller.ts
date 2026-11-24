@@ -63,7 +63,7 @@ export class PatientController {
 				pagination: result.pagination,
 			})
 		} catch (error) {
-			console.error('Error retrieving patients:', error)
+			req.log.error({ err: error }, 'Error retrieving patients')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -97,7 +97,7 @@ export class PatientController {
 				data: patientWithFiles,
 			})
 		} catch (error) {
-			console.error('Error retrieving patient:', error)
+			req.log.error({ err: error }, 'Error retrieving patient')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -134,8 +134,8 @@ export class PatientController {
 				return res.status(409).send({ error: 'Email already registered' })
 			}
 
-			const generatedPassword = this.cryptoService.generateRandomCode(8)
-			const hashedPassword = await this.cryptoService.hashPassword(generatedPassword)
+			// O paciente entra por CPF + data de nascimento. A senha existe só por exigência do modelo e ninguém a conhece.
+			const hashedPassword = await this.cryptoService.hashUnusablePassword()
 
 			const patient = await this.patientRepository.create({
 				...data.data,
@@ -157,11 +157,10 @@ export class PatientController {
 				message: 'Patient created successfully',
 				data: {
 					patient,
-					temporaryPassword: generatedPassword,
 				},
 			})
 		} catch (error) {
-			console.error('Error creating patient:', error)
+			req.log.error({ err: error }, 'Error creating patient')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -215,7 +214,7 @@ export class PatientController {
 				data: updatedPatient,
 			})
 		} catch (error) {
-			console.error('Error updating patient:', error)
+			req.log.error({ err: error }, 'Error updating patient')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}

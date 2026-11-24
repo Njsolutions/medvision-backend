@@ -2,6 +2,7 @@ import { UtiRepository } from '@/modules/uti/uti.repository'
 import { CreateUtiNoteSchema, CreateUtiSchema, UpdateUtiSchema, UtiIdSchema, UtiVisitorInviteSchema } from '@/modules/uti/uti.schema'
 import { auditService } from '@/services/audit.service'
 import { createDailyService } from '@/services/daily.service'
+import { rateLimitService } from '@/services/ratelimit.service'
 import { realtimeService } from '@/services/realtime.service'
 import { canAccessUti, canManageUtiBed } from '@/utils/security/access-control'
 import type { FastifyReply, FastifyRequest } from 'fastify'
@@ -49,7 +50,7 @@ export class UtiController {
 					data: updatedUti,
 				})
 			} catch (dailyError) {
-				console.error('Error creating Daily.co room for UTI bed:', dailyError)
+				req.log.error({ err: dailyError }, 'Error creating Daily.co room for UTI bed')
 				this.broadcastUtiEvent('uti.created', uti)
 				// Retorna o leito mesmo sem a sala, mas alerta o erro
 				return res.status(201).send({
@@ -59,7 +60,7 @@ export class UtiController {
 				})
 			}
 		} catch (error) {
-			console.error('Error creating empty UTI bed:', error)
+			req.log.error({ err: error }, 'Error creating empty UTI bed')
 			return res.status(500).send({
 				error: 'Erro interno do servidor',
 				...(process.env.NODE_ENV !== 'production' && {
@@ -120,7 +121,7 @@ export class UtiController {
 					roomName: roomName,
 				})
 			} catch (dailyError) {
-				console.error('Error creating Daily.co room for UTI bed:', dailyError)
+				req.log.error({ err: dailyError }, 'Error creating Daily.co room for UTI bed')
 				// Continua sem a sala em caso de erro
 			}
 
@@ -141,7 +142,7 @@ export class UtiController {
 				data: finalUti,
 			})
 		} catch (error) {
-			console.error('Error creating UTI bed:', error)
+			req.log.error({ err: error }, 'Error creating UTI bed')
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
@@ -159,7 +160,7 @@ export class UtiController {
 				data: utis,
 			})
 		} catch (error) {
-			console.error('Error fetching UTI beds:', error)
+			req.log.error({ err: error }, 'Error fetching UTI beds')
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
@@ -187,7 +188,7 @@ export class UtiController {
 				data: uti,
 			})
 		} catch (error) {
-			console.error('Error fetching UTI bed:', error)
+			req.log.error({ err: error }, 'Error fetching UTI bed')
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
@@ -260,7 +261,7 @@ export class UtiController {
 				data: updatedUti,
 			})
 		} catch (error) {
-			console.error('Error updating UTI bed:', error)
+			req.log.error({ err: error }, 'Error updating UTI bed')
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
@@ -296,7 +297,6 @@ export class UtiController {
 						roomLink: room.url,
 						roomName: room.roomName,
 					})
-					console.log(`Sala Daily criada automaticamente para UTI ${uti.id}: ${room.roomName}`)
 				} catch (createRoomError) {
 					try {
 						const existingRoom = await this.dailyService.getRoom(roomName)
@@ -304,14 +304,8 @@ export class UtiController {
 							roomLink: existingRoom.url,
 							roomName,
 						})
-						console.log(`Sala Daily existente sincronizada para UTI ${uti.id}: ${roomName}`)
 					} catch (getRoomError) {
-						console.error('Error ensuring Daily.co room for UTI bed:', {
-							createRoomError,
-							getRoomError,
-							utiId: uti.id,
-							roomName,
-						})
+						req.log.error({ err: getRoomError, createRoomError, utiId: uti.id }, 'Error ensuring Daily.co room for UTI bed')
 						return res.status(500).send({
 							error: 'Nao foi possivel criar a sala de video para este leito de UTI',
 							details: getRoomError instanceof Error ? getRoomError.message : 'Unknown error',
@@ -328,7 +322,6 @@ export class UtiController {
 			if (!uti.roomName) {
 				const roomName = `uti-bed-${uti.id}`
 				uti = await this.utiRepository.update(uti.id, { roomName })
-				console.log(`✓ RoomName gerado automaticamente para UTI ${uti.id}: ${roomName}`)
 			}
 
 			const ensuredRoomName = uti.roomName || `uti-bed-${uti.id}`
@@ -348,12 +341,7 @@ export class UtiController {
 						roomName: room.roomName,
 					})
 				} catch (createRoomError) {
-					console.error('Error ensuring Daily.co room for UTI bed:', {
-						getRoomError,
-						createRoomError,
-						utiId: uti.id,
-						roomName: ensuredRoomName,
-					})
+					req.log.error({ err: createRoomError, getRoomError, utiId: uti.id }, 'Error ensuring Daily.co room for UTI bed')
 					return res.status(500).send({
 						error: 'Nao foi possivel criar a sala de video para este leito de UTI',
 						details: createRoomError instanceof Error ? createRoomError.message : 'Unknown error',
@@ -366,15 +354,6 @@ export class UtiController {
 				// Mapeia 'master' para 'admin' pois Daily.co não reconhece 'master'
 				const dailyRole = req.user.role === 'master' ? 'admin' : req.user.role
 
-				console.log('Gerando token para UTI:', {
-					utiId: uti.id,
-					roomName: uti.roomName,
-					roomLink: uti.roomLink,
-					userId: req.user.id,
-					userRole: req.user.role,
-					dailyRole,
-					userEmail: req.user.email,
-				})
 
 				const token = await this.dailyService.generateToken(
 					uti.roomName ?? '',
@@ -396,20 +375,14 @@ export class UtiController {
 					},
 				})
 			} catch (tokenError) {
-				console.error('❌ Error generating Daily.co token for UTI:', tokenError)
-				console.error('Error details:', {
-					message: tokenError instanceof Error ? tokenError.message : 'Unknown error',
-					stack: tokenError instanceof Error ? tokenError.stack : undefined,
-					utiId: uti.id,
-					roomName: uti.roomName,
-				})
+				req.log.error({ err: tokenError }, '❌ Error generating Daily.co token for UTI')
 				return res.status(500).send({
 					error: 'Não foi possível gerar o token de acesso',
 					details: tokenError instanceof Error ? tokenError.message : 'Unknown error',
 				})
 			}
 		} catch (error) {
-			console.error('Error getting room token:', error)
+			req.log.error({ err: error }, 'Error getting room token')
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
@@ -476,7 +449,7 @@ export class UtiController {
 				},
 			})
 		} catch (error) {
-			console.error('Error inviting UTI visitor:', error)
+			req.log.error({ err: error }, 'Error inviting UTI visitor')
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
@@ -501,12 +474,23 @@ export class UtiController {
 
 			const notes = uti.patientId ? await this.utiRepository.findNotesByPatient(uti.patientId) : []
 
+			if (uti.patientId && req.user) {
+				await auditService.logAction(
+					req.user.id,
+					'UTI_NOTES_VIEW',
+					'uti',
+					uti.id,
+					{ patientId: uti.patientId, count: notes.length },
+					req.auditContext ?? {},
+				)
+			}
+
 			return res.status(200).send({
 				message: 'UTI notes retrieved successfully',
 				data: notes,
 			})
 		} catch (error) {
-			console.error('Error fetching UTI notes:', error)
+			req.log.error({ err: error }, 'Error fetching UTI notes')
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
@@ -525,6 +509,10 @@ export class UtiController {
 
 			if (!params.success) {
 				return res.status(400).send({ error: 'ID do leito de UTI inválido', details: params.error })
+			}
+
+			if (rateLimitService.isLimited(`uti-note:${req.user.id}`, { windowMs: 60 * 1000, maxRequests: 30 })) {
+				return res.status(429).send({ error: 'Muitas anotações em pouco tempo. Aguarde e tente novamente.' })
 			}
 
 			const data = CreateUtiNoteSchema.safeParse(req.body)
@@ -554,15 +542,24 @@ export class UtiController {
 				content: data.data.content,
 			})
 
+			await auditService.logAction(
+				req.user.id,
+				'UTI_NOTE_CREATE',
+				'uti',
+				uti.id,
+				{ patientId: uti.patientId, noteId: note.id },
+				req.auditContext ?? {},
+			)
+
 			// Payload sem conteúdo clínico: clientes refazem o GET autorizado.
-			realtimeService.broadcast({ type: 'uti.note.created', data: { utiId: uti.id } })
+			realtimeService.publish({ type: 'uti.note.created', data: { utiId: uti.id } }, { utiAccess: true })
 
 			return res.status(201).send({
 				message: 'UTI note created successfully',
 				data: note,
 			})
 		} catch (error) {
-			console.error('Error creating UTI note:', error)
+			req.log.error({ err: error }, 'Error creating UTI note')
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}
@@ -594,14 +591,17 @@ export class UtiController {
 		status: string
 		bedNumber: string
 	}) {
-		realtimeService.broadcast({
-			type,
-			data: {
-				utiId: uti.id,
-				patientId: uti.patientId,
-				status: uti.status,
-				bedNumber: uti.bedNumber,
+		realtimeService.publish(
+			{
+				type,
+				data: {
+					utiId: uti.id,
+					patientId: uti.patientId,
+					status: uti.status,
+					bedNumber: uti.bedNumber,
+				},
 			},
-		})
+			{ utiAccess: true },
+		)
 	}
 }

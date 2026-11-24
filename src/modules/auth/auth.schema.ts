@@ -5,8 +5,8 @@ export const RegisterUserSchema = z.object({
 	cpf: z.string().length(11, 'CPF must be 11 characters long'),
 	phone: z.string().min(10, 'Phone number is required'),
 	email: z.string().email('Invalid email address'),
-	password: z.string().min(6, 'Password must be at least 6 characters long').optional(),
-	role: z.enum(['master', 'admin', 'doctor', 'patient']).optional(),
+	// Obrigatório: o default do banco é `admin`, e omitir o papel criaria um admin sem querer.
+	role: z.enum(['master', 'admin', 'doctor', 'patient']),
 })
 
 export const SignInSchema = z.object({

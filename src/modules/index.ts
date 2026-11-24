@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { adminRoutes } from './admin/admin.routes'
+import { alertRoutes } from './alert/alert.routes'
 import { anamneseRoutes } from './anamnese/anamnese.routes'
 import { appointmentRoutes } from './appointment/appointment.routes'
 import { auditLogRoutes } from './auditlog/auditlog.routes'
@@ -18,6 +19,7 @@ import { utiRoutes } from './uti/uti.routes'
 export function registerModules(app: FastifyInstance, version: string) {
 	app.register(authRoutes, { prefix: `/v${version}/auth` })
 	app.register(adminRoutes, { prefix: `/v${version}/admins` })
+	app.register(alertRoutes, { prefix: `/v${version}/alerts` })
 	app.register(dashboardRoutes, { prefix: `/v${version}/dashboard` })
 	app.register(doctorRoutes, { prefix: `/v${version}/doctors` })
 	app.register(patientRoutes, { prefix: `/v${version}/patients` })

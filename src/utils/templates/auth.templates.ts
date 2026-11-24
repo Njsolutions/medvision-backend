@@ -5,142 +5,113 @@ import type {
 	SecurityCodeEmailData,
 	PasswordRecoveryCodeEmailData,
 } from '../../types/email.types'
-import { baseTemplate } from './base.template'
+import {
+	emailLayout,
+	paragraph,
+	codeBox,
+	detailsBox,
+	notice,
+	button,
+	linkFallback,
+} from './base.template'
 
 export const passwordResetTemplate = (
 	data: PasswordResetEmailData,
 ): EmailTemplate => {
-	const content = `
-        <h2>Redefinição de Senha</h2>
-        <p>Olá ${data.name},</p>
-        <p>Recebemos uma solicitação para redefinir a senha da sua conta.</p>
-        
-        <div class="info-box">
-            <p><strong>Link válido por:</strong> ${data.expiresIn}</p>
-        </div>
-        
-        <div style="text-align: center;">
-            <a href="${data.resetUrl}" class="button">Redefinir Senha</a>
-        </div>
-        
-        <div class="warning">
-            <p><strong>Não solicitou esta redefinição?</strong> Ignore este email. Sua senha permanecerá a mesma.</p>
-        </div>
-        
-        <div class="divider"></div>
-        
-        <p>Por segurança, este link expira em ${data.expiresIn}.</p>
-        <p>Se o botão não funcionar, copie e cole este link no navegador:</p>
-        <p style="word-break: break-all; color: #667eea;">${data.resetUrl}</p>
-    `
+	const title = 'Redefinição de senha'
 
 	return {
 		subject: 'Redefinição de Senha - Amparo Online',
-		html: baseTemplate(content, 'Redefinição de Senha'),
+		html: emailLayout({
+			title,
+			name: data.name,
+			blocks: [
+				paragraph('Recebemos uma solicitação para redefinir a senha da sua conta.'),
+				button(data.resetUrl, 'Redefinir senha'),
+				detailsBox([['Link válido por', data.expiresIn]]),
+				linkFallback(data.resetUrl),
+				notice(
+					'Não solicitou esta redefinição? Ignore este e-mail: sua senha permanecerá a mesma.',
+				),
+			],
+		}),
 	}
 }
 
 export const accountVerificationTemplate = (
 	data: VerificationEmailData,
 ): EmailTemplate => {
-	const content = `
-        <h2>Verificação de Conta</h2>
-        <p>Olá ${data.name},</p>
-        <p>Obrigado por se cadastrar no Amparo Online! Para ativar sua conta, clique no botão abaixo:</p>
-        
-        <div style="text-align: center;">
-            <a href="${data.verificationUrl}" class="button">Verificar Conta</a>
-        </div>
-        
-        <div class="info-box">
-            <p><strong>Link válido por:</strong> ${data.expiresIn}</p>
-        </div>
-        
-        <div class="divider"></div>
-        
-        <p>Se o botão não funcionar, copie e cole este link no navegador:</p>
-        <p style="word-break: break-all; color: #667eea;">${data.verificationUrl}</p>
-        
-        <p>Se você não criou uma conta no Amparo Online, ignore este email.</p>
-    `
+	const title = 'Verificação de conta'
 
 	return {
 		subject: 'Verifique sua Conta - Amparo Online',
-		html: baseTemplate(content, 'Verificação de Conta'),
+		html: emailLayout({
+			title,
+			name: data.name,
+			blocks: [
+				paragraph(
+					'Obrigado por se cadastrar no Amparo Online! Para ativar sua conta, clique no botão abaixo.',
+				),
+				button(data.verificationUrl, 'Verificar conta'),
+				detailsBox([['Link válido por', data.expiresIn]]),
+				linkFallback(data.verificationUrl),
+				paragraph(
+					'Se você não criou uma conta no Amparo Online, ignore este e-mail.',
+				),
+			],
+		}),
 	}
 }
 
 export const securityCodeTemplate = (
 	data: SecurityCodeEmailData,
 ): EmailTemplate => {
-	const content = `
-        <h2>Código de Segurança</h2>
-        <p>Olá ${data.name},</p>
-        <p>Use o código abaixo para completar sua autenticação:</p>
-        
-        <div class="code-box">
-            <div class="code">${data.securityCode}</div>
-        </div>
-        
-        ${
-					data.expiresIn
-						? `
-        <div class="info-box">
-            <p><strong>Este código expira em:</strong> ${data.expiresIn}</p>
-        </div>
-        `
-						: ''
-				}
-        
-        <div class="warning">
-            <p><strong>Não compartilhe este código com ninguém.</strong> Nossa equipe nunca solicitará este código.</p>
-        </div>
-        
-        <div class="divider"></div>
-        
-        <p>Se você não solicitou este código, ignore este email ou entre em contato conosco imediatamente.</p>
-    `
+	const title = 'Código de segurança'
 
 	return {
 		subject: 'Seu Código de Segurança - Amparo Online',
-		html: baseTemplate(content, 'Código de Segurança'),
+		html: emailLayout({
+			title,
+			name: data.name,
+			blocks: [
+				paragraph('Aqui está o seu código para completar a autenticação:'),
+				codeBox(data.securityCode),
+				...(data.expiresIn
+					? [detailsBox([['Este código expira em', data.expiresIn]])]
+					: []),
+				notice(
+					'Não compartilhe este código com ninguém. Nossa equipe nunca solicitará este código.',
+				),
+				paragraph(
+					'Se você não solicitou este código, ignore este e-mail ou entre em contato conosco imediatamente.',
+				),
+			],
+		}),
 	}
 }
 
 export const passwordRecoveryCodeTemplate = (
 	data: PasswordRecoveryCodeEmailData,
 ): EmailTemplate => {
-	const content = `
-        <h2>Código de Recuperação de Senha</h2>
-        <p>Olá ${data.name},</p>
-        <p>Recebemos uma solicitação para recuperar sua senha. Use o código abaixo:</p>
-        
-        <div class="code-box">
-            <div class="code">${data.recoveryCode}</div>
-        </div>
-        
-        ${
-					data.expiresIn
-						? `
-        <div class="info-box">
-            <p><strong>Este código expira em:</strong> ${data.expiresIn}</p>
-        </div>
-        `
-						: ''
-				}
-        
-        <div class="warning">
-            <p><strong>Não solicitou recuperação de senha?</strong> Ignore este email e sua senha permanecerá a mesma.</p>
-        </div>
-        
-        <div class="divider"></div>
-        
-        <p>Por segurança, não compartilhe este código com ninguém.</p>
-        <p>Nossa equipe nunca solicitará este código por telefone ou email.</p>
-    `
+	const title = 'Recuperação de senha'
 
 	return {
 		subject: 'Código de Recuperação de Senha - Amparo Online',
-		html: baseTemplate(content, 'Recuperação de Senha'),
+		html: emailLayout({
+			title,
+			name: data.name,
+			blocks: [
+				paragraph(
+					'Aqui está o seu código de confirmação para a recuperação de senha:',
+				),
+				codeBox(data.recoveryCode),
+				...(data.expiresIn
+					? [detailsBox([['Este código expira em', data.expiresIn]])]
+					: []),
+				notice(
+					'Não solicitou a recuperação? Ignore este e-mail: sua senha permanecerá a mesma. Nunca compartilhe este código com ninguém.',
+				),
+			],
+		}),
 	}
 }

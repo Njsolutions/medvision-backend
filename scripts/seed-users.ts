@@ -122,6 +122,10 @@ const patients = [
 
 async function seedUsers() {
 	try {
+		if (process.env.NODE_ENV === 'production') {
+			throw new Error('seed-users cria usuários de teste com senha fixa e não pode rodar com NODE_ENV=production')
+		}
+
 		console.log('Iniciando seed de médicos e pacientes...')
 
 		const password = 'MedVision@2026'

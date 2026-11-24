@@ -157,16 +157,19 @@ export class RequestController {
 			userAgent: req.headers['user-agent'],
 		})
 
-		realtimeService.broadcast({
-			type: 'requests.created',
-			data: {
-				requestIds: requests.map((request) => request.id),
-				patientId: data.patientId,
-				doctorId: data.doctorId,
-				appointmentId: data.appointmentId,
-				count: requests.length,
+		realtimeService.publish(
+			{
+				type: 'requests.created',
+				data: {
+					requestIds: requests.map((request) => request.id),
+					patientId: data.patientId,
+					doctorId: data.doctorId,
+					appointmentId: data.appointmentId,
+					count: requests.length,
+				},
 			},
-		})
+			{ patientId: data.patientId, doctorIds: [data.doctorId] },
+		)
 
 		return res.status(201).send({
 				success: true,
@@ -183,7 +186,7 @@ export class RequestController {
 				})
 			}
 
-			console.error('Erro ao criar solicitações:', error)
+			req.log.error({ err: error }, 'Erro ao criar solicitações')
 			return res.status(500).send({
 				success: false,
 				message: 'Erro ao criar solicitações',
@@ -229,7 +232,7 @@ export class RequestController {
 				})
 			}
 
-			console.error('Erro ao listar solicitações:', error)
+			req.log.error({ err: error }, 'Erro ao listar solicitações')
 			return res.status(500).send({
 				success: false,
 				message: 'Erro ao listar solicitações',
@@ -274,7 +277,7 @@ export class RequestController {
 				})
 			}
 
-			console.error('Erro ao buscar solicitação:', error)
+			req.log.error({ err: error }, 'Erro ao buscar solicitação')
 			return res.status(500).send({
 				success: false,
 				message: 'Erro ao buscar solicitação',
@@ -316,16 +319,19 @@ export class RequestController {
 
 			const updatedRequest = await this.requestRepository.update(id, data)
 
-			realtimeService.broadcast({
-				type: 'request.updated',
-				data: {
-					requestId: updatedRequest.id,
-					patientId: updatedRequest.patientId,
-					doctorId: updatedRequest.doctorId,
-					status: updatedRequest.status,
-					type: updatedRequest.type,
+			realtimeService.publish(
+				{
+					type: 'request.updated',
+					data: {
+						requestId: updatedRequest.id,
+						patientId: updatedRequest.patientId,
+						doctorId: updatedRequest.doctorId,
+						status: updatedRequest.status,
+						type: updatedRequest.type,
+					},
 				},
-			})
+				{ patientId: updatedRequest.patientId, doctorIds: [updatedRequest.doctorId] },
+			)
 
 			// Registra auditoria
 			await auditService.log({
@@ -357,7 +363,7 @@ export class RequestController {
 				})
 			}
 
-			console.error('Erro ao atualizar solicitação:', error)
+			req.log.error({ err: error }, 'Erro ao atualizar solicitação')
 			return res.status(500).send({
 				success: false,
 				message: 'Erro ao atualizar solicitação',
@@ -398,15 +404,18 @@ export class RequestController {
 
 			await this.requestRepository.delete(id)
 
-			realtimeService.broadcast({
-				type: 'request.deleted',
-				data: {
-					requestId: id,
-					patientId: existingRequest.patientId,
-					doctorId: existingRequest.doctorId,
-					type: existingRequest.type,
+			realtimeService.publish(
+				{
+					type: 'request.deleted',
+					data: {
+						requestId: id,
+						patientId: existingRequest.patientId,
+						doctorId: existingRequest.doctorId,
+						type: existingRequest.type,
+					},
 				},
-			})
+				{ patientId: existingRequest.patientId, doctorIds: [existingRequest.doctorId] },
+			)
 
 			// Registra auditoria
 			await auditService.log({
@@ -435,7 +444,7 @@ export class RequestController {
 				})
 			}
 
-			console.error('Erro ao deletar solicitação:', error)
+			req.log.error({ err: error }, 'Erro ao deletar solicitação')
 			return res.status(500).send({
 				success: false,
 				message: 'Erro ao deletar solicitação',
@@ -466,7 +475,7 @@ export class RequestController {
 				data: requests,
 			})
 		} catch (error: any) {
-			console.error('Erro ao buscar solicitações do paciente:', error)
+			req.log.error({ err: error }, 'Erro ao buscar solicitações do paciente')
 			return res.status(500).send({
 				success: false,
 				message: 'Erro ao buscar solicitações do paciente',
@@ -497,7 +506,7 @@ export class RequestController {
 				data: requests,
 			})
 		} catch (error: any) {
-			console.error('Erro ao buscar solicitações do médico:', error)
+			req.log.error({ err: error }, 'Erro ao buscar solicitações do médico')
 			return res.status(500).send({
 				success: false,
 				message: 'Erro ao buscar solicitações do médico',
@@ -540,11 +549,8 @@ export class RequestController {
 			const signatures = await signatureRepository.findByDocument('request', id)
 			const signature = signatures.length > 0 ? signatures[0] : undefined
 
-			console.log(`🔍 Assinaturas encontradas: ${signatures.length}`)
 			if (signature) {
-				console.log('✅ Assinatura será incluída no PDF')
 			} else {
-				console.log('⚠️ Nenhuma assinatura encontrada para esta solicitação - PDF será gerado sem assinatura')
 			}
 
 			// Gera PDF
@@ -558,7 +564,6 @@ export class RequestController {
 				} : undefined
 			)
 
-			console.log(`✅ PDF gerado com sucesso, tamanho: ${Buffer.from(base64PDF, 'base64').length}`)
 
 			// Registra acesso no audit log
 			try {
@@ -572,7 +577,7 @@ export class RequestController {
 					userAgent: req.headers['user-agent'],
 				})
 			} catch (auditError) {
-				console.error('⚠️ Erro ao registrar audit log:', auditError)
+				req.log.error({ err: auditError }, '⚠️ Erro ao registrar audit log')
 			}
 
 			return res.status(200).send({
@@ -586,9 +591,7 @@ export class RequestController {
 				},
 			})
 		} catch (error: any) {
-			console.error('❌ Error generating PDF:', error)
-			console.error('Error message:', error?.message)
-			console.error('Error stack:', error?.stack)
+			req.log.error({ err: error }, '❌ Error generating PDF')
 
 			return res.status(500).send({
 				success: false,
@@ -691,7 +694,7 @@ export class RequestController {
 				},
 			})
 		} catch (error: any) {
-			console.error('Error signing request:', error)
+			req.log.error({ err: error }, 'Error signing request')
 			return res.status(500).send({
 				success: false,
 				message: 'Erro ao assinar solicitação',

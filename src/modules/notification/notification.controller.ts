@@ -46,7 +46,7 @@ export class NotificationController {
 				data: results,
 			})
 		} catch (error: any) {
-			console.error('Erro ao enviar notificação:', error)
+			req.log.error({ err: error }, 'Erro ao enviar notificação')
 			return res.status(500).send({
 				success: false,
 				message: 'Erro ao enviar notificação',

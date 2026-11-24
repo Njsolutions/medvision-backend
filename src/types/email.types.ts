@@ -70,7 +70,8 @@ export interface WelcomeEmailData {
 	name: string
 	email: string
 	loginUrl?: string
-	temporaryPassword?: string // Senha gerada automaticamente para médicos/admins
+	setPasswordUrl?: string // Link de uso único para definir a senha no primeiro acesso
+	expiresIn?: string
 }
 
 export interface PasswordResetEmailData {

@@ -1,35 +1,63 @@
 import type { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify'
 import fp from 'fastify-plugin'
-import { db } from '@/lib/prisma'
+import { sessionService } from '@/services/session.service'
+import { parseAllowedOrigins, passesCsrfCheck } from '@/utils/security/origin'
+import { ACCESS_COOKIE } from '@/utils/session-cookies'
+
+/**
+ * Token de acesso: cookie HttpOnly (navegador) ou `Authorization: Bearer` (clientes sem navegador).
+ * O cookie tem prioridade.
+ */
+export function extractAccessToken(req: FastifyRequest): { token: string; fromCookie: boolean } | null {
+	const cookieToken = req.cookies?.[ACCESS_COOKIE]
+	if (cookieToken) return { token: cookieToken, fromCookie: true }
+
+	const header = req.headers.authorization
+	if (header?.startsWith('Bearer ')) {
+		const bearer = header.slice('Bearer '.length).trim()
+		if (bearer) return { token: bearer, fromCookie: false }
+	}
+
+	return null
+}
+
+/** Resolve a sessão sem responder ao cliente. Usado por rotas com autenticação opcional. */
+export async function resolveSession(req: FastifyRequest) {
+	const extracted = extractAccessToken(req)
+	if (!extracted) return null
+
+	return sessionService.authenticate(extracted.token)
+}
 
 async function authenticate(req: FastifyRequest, res: FastifyReply) {
-	const token = req.headers.authorization?.replace('Bearer ', '')
+	const extracted = extractAccessToken(req)
 
-	if (!token) {
+	if (!extracted) {
 		return res.status(401).send({ error: 'Token não fornecido' })
 	}
 
-	try {
-		await req.jwtVerify()
-
-		if (!req.user?.id) {
-			return res.status(401).send({ error: 'Token inválido' })
-		}
-
-		const user = await db.user.findUnique({
-			where: { id: req.user.id },
-			include: {
-				doctor: { select: { id: true } },
-				patient: { select: { id: true } },
-			},
+	if (
+		!passesCsrfCheck({
+			method: req.method,
+			origin: req.headers.origin,
+			usesCookie: extracted.fromCookie,
+			allowedOrigins: parseAllowedOrigins(process.env.CORS_ORIGINS),
 		})
+	) {
+		return res.status(403).send({ error: 'Origem não permitida' })
+	}
 
-		if (!user || !user.active) {
-			return res.status(401).send({ error: 'Usuário inativo ou não encontrado' })
+	try {
+		const result = await sessionService.authenticate(extracted.token)
+
+		if (!result) {
+			return res.status(401).send({ error: 'Sessão inválida ou expirada' })
 		}
 
+		const { user, session } = result
+
+		req.sessionId = session.id
 		req.user = {
-			...req.user,
 			id: user.id,
 			userId: user.id,
 			email: user.email,
@@ -37,10 +65,11 @@ async function authenticate(req: FastifyRequest, res: FastifyReply) {
 			role: user.role,
 			doctorId: user.doctor?.id,
 			patientId: user.patient?.id,
+			utiAccess: user.doctor?.utiAccess,
 		}
 	} catch (err) {
-		console.error('Erro ao verificar o token JWT:', err)
-		return res.status(450).send({ error: 'Token inválido' })
+		req.log.error({ err }, 'Erro ao validar a sessão')
+		return res.status(500).send({ error: 'Erro interno do servidor' })
 	}
 }
 

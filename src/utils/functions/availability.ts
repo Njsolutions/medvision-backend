@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger'
 interface Period {
 	start: string
 	end: string
@@ -37,7 +38,7 @@ export function validateDoctorAvailability(
 		try {
 			availability = JSON.parse(weeklyAvailability)
 		} catch (e) {
-			console.error('Erro ao parsear weeklyAvailability:', e)
+			logger.error({ err: e }, 'Erro ao parsear weeklyAvailability')
 			return {
 				isAvailable: false,
 				message: 'Erro ao processar disponibilidade do médico',
@@ -151,7 +152,7 @@ export function formatWeeklyAvailability(weeklyAvailability: any): string {
 		try {
 			availability = JSON.parse(weeklyAvailability)
 		} catch (e) {
-			console.error('Erro ao parsear weeklyAvailability:', e)
+			logger.error({ err: e }, 'Erro ao parsear weeklyAvailability')
 			return 'Erro ao processar disponibilidade'
 		}
 	}
@@ -195,7 +196,6 @@ export function formatWeeklyAvailability(weeklyAvailability: any): string {
 		}
 	}
 
-	console.log('Dias disponíveis encontrados:', availableDays)
 
 	return availableDays.length > 0 
 		? availableDays.join(' | ') 

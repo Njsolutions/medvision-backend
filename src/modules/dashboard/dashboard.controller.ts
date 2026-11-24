@@ -84,7 +84,7 @@ export class DashboardController {
 				},
 			})
 		} catch (error) {
-			console.error('Error getting dashboard stats:', error)
+			req.log.error({ err: error }, 'Error getting dashboard stats')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}

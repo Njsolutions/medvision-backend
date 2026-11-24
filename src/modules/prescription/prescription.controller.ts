@@ -451,11 +451,8 @@ export class PrescriptionController {
 			const signatures = await signatureRepository.findByDocument('prescription', id)
 			const signature = signatures.length > 0 ? signatures[0] : undefined
 
-			console.log(`🔍 Assinaturas encontradas: ${signatures.length}`)
 			if (signature) {
-				console.log('✅ Assinatura será incluída no PDF')
 			} else {
-				console.log('⚠️ Nenhuma assinatura encontrada para esta prescrição - PDF será gerado sem assinatura')
 			}
 
 			// Gera PDF
@@ -469,7 +466,6 @@ export class PrescriptionController {
 				} : undefined
 			)
 
-			console.log(`✅ PDF gerado com sucesso, tamanho: ${Buffer.from(base64PDF, 'base64').length}`)
 
 			// Registra acesso no audit log
 			try {
@@ -480,7 +476,7 @@ export class PrescriptionController {
 					request.headers['user-agent'],
 				)
 			} catch (auditError) {
-				console.error('⚠️ Erro ao registrar audit log:', auditError)
+				request.log.error({ err: auditError }, '⚠️ Erro ao registrar audit log')
 			}
 
 			return reply.status(200).send({
@@ -494,11 +490,7 @@ export class PrescriptionController {
 				},
 			})
 		} catch (error) {
-			console.error('❌ Error generating PDF:', error)
-			if (error instanceof Error) {
-				console.error('Error message:', error.message)
-				console.error('Error stack:', error.stack)
-			}
+			request.log.error({ err: error }, '❌ Error generating PDF')
 
 			return reply.status(500).send({
 				statusCode: 500,
@@ -603,7 +595,7 @@ export class PrescriptionController {
 				},
 			})
 		} catch (error) {
-			console.error('Error signing prescription:', error)
+			request.log.error({ err: error }, 'Error signing prescription')
 			return reply.status(500).send({
 				statusCode: 500,
 				error: 'Internal Server Error',
@@ -618,15 +610,18 @@ export class PrescriptionController {
 		doctorId: string
 		appointmentId?: string | null
 	}) {
-		realtimeService.broadcast({
-			type,
-			data: {
-				prescriptionId: prescription.id,
-				patientId: prescription.patientId,
-				doctorId: prescription.doctorId,
-				appointmentId: prescription.appointmentId,
+		realtimeService.publish(
+			{
+				type,
+				data: {
+					prescriptionId: prescription.id,
+					patientId: prescription.patientId,
+					doctorId: prescription.doctorId,
+					appointmentId: prescription.appointmentId,
+				},
 			},
-		})
+			{ patientId: prescription.patientId, doctorIds: [prescription.doctorId] },
+		)
 	}
 }
 

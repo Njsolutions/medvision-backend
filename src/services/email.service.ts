@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { logger } from '@/lib/logger'
 import type {
 	EmailOptions,
 	SendEmailResponse,
@@ -18,6 +19,7 @@ import {
 	prescriptionReadyTemplate,
 	welcomePatientTemplate,
 	welcomeDoctorTemplate,
+	welcomeAdminTemplate,
 	passwordResetTemplate,
 	accountVerificationTemplate,
 	securityCodeTemplate,
@@ -58,7 +60,7 @@ class EmailService {
 
 			return data as SendEmailResponse
 		} catch (error) {
-			console.error('Erro ao enviar email:', error)
+			logger.error({ err: error }, 'Erro ao enviar email')
 			throw error
 		}
 	}
@@ -119,6 +121,14 @@ class EmailService {
 		data: WelcomeEmailData,
 	): Promise<SendEmailResponse> {
 		const { subject, html } = welcomeDoctorTemplate(data)
+		return this.sendEmail({ to, subject, html })
+	}
+
+	async sendWelcomeAdmin(
+		to: string,
+		data: WelcomeEmailData,
+	): Promise<SendEmailResponse> {
+		const { subject, html } = welcomeAdminTemplate(data)
 		return this.sendEmail({ to, subject, html })
 	}
 

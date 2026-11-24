@@ -8,15 +8,21 @@ datasource db {
 }
 
 model User {
-  id        String  @id @default(uuid())
-  name      String
-  cpf       String  @unique @db.VarChar(11)
-  phone     String  @db.VarChar(15)
-  email     String  @unique
-  active    Boolean @default(true)
-  password  String
-  resetCode String?
-  role      Roles   @default(admin)
+  id       String  @id @default(uuid())
+  name     String
+  cpf      String  @unique @db.VarChar(11)
+  phone    String  @db.VarChar(15)
+  email    String  @unique
+  active   Boolean @default(true)
+  password String
+  role     Roles   @default(admin)
+
+  // Recuperação de senha. O código e o token ficam só como hash; ambos expiram e são de uso único.
+  resetCodeHash       String?
+  resetCodeExpiresAt  DateTime?
+  resetCodeAttempts   Int       @default(0)
+  resetTokenHash      String?   @unique
+  resetTokenExpiresAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -29,8 +35,38 @@ model User {
   triagens     Triagem[]
   patientFiles PatientFile[]
   utiNotes     UtiNote[]
+  sessions     Session[]
 
   @@map("users")
+}
+
+// Sessão com token opaco. O banco guarda só o SHA-256 dos tokens; o valor em claro existe apenas no cookie do navegador.
+model Session {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accessHash          String    @unique
+  refreshHash         String    @unique
+  previousRefreshHash String?
+  rotatedAt           DateTime?
+
+  accessExpiresAt  DateTime
+  refreshExpiresAt DateTime
+  lastUsedAt       DateTime @default(now())
+
+  ip        String?
+  userAgent String?
+
+  revokedAt     DateTime?
+  revokedReason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([previousRefreshHash])
+  @@index([refreshExpiresAt])
+  @@map("sessions")
 }
 
 model Master {
@@ -86,11 +122,11 @@ model Patient {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  age         Int
-  birthDate   DateTime?
-  gender      Genders
-  address     Json?
-  motherName  String?
+  age        Int
+  birthDate  DateTime?
+  gender     Genders
+  address    Json?
+  motherName String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -260,17 +296,17 @@ model Appointment {
 }
 
 model Prescription {
-  id                 String              @id @default(uuid())
-  patientId          String
-  doctorId           String
-  appointmentId      String?
-  orientacoesGerais  String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  appointment        Appointment?        @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-  doctor             Doctor              @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  patient            Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  medicamentos       Medicamento[]
+  id                String        @id @default(uuid())
+  patientId         String
+  doctorId          String
+  appointmentId     String?
+  orientacoesGerais String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  appointment       Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  doctor            Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient           Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  medicamentos      Medicamento[]
 
   @@index([doctorId])
   @@index([patientId])
@@ -281,16 +317,16 @@ model Medicamento {
   id             String       @id @default(uuid())
   prescriptionId String
   prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
-  
-  nome          String
-  dosagem       String
-  frequencia    String
-  duracao       String
-  via           String
-  orientacoes   String?
-  
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+
+  nome        String
+  dosagem     String
+  frequencia  String
+  duracao     String
+  via         String
+  orientacoes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([prescriptionId])
   @@map("medicamentos")
@@ -320,55 +356,55 @@ model Request {
 }
 
 model Anaminese {
-  id            String       @id @default(uuid())
+  id            String  @id @default(uuid())
   patientId     String
   doctorId      String
   appointmentId String?
-  
-  // Queixa Principal e HDA
-  queixaPrincipal        String?
-  anamneseRetorno        String?
-  hdaInicio              String?
-  hdaDuracao             String?
-  hdaIntensidade         String?
-  hdaCaracteristica      String?
-  hdaLocalizacao         String?
-  hdaIrradiacao          String?
-  hdaFatoresMelhora      String?
-  hdaFatoresPiora        String?
-  hdaSintomasAssociados  String?
-  hdaEvolucao            String?
-  
-  // Sinais Vitais
-  pressaoArterial         String?
-  frequenciaCardiaca      String?
-  frequenciaRespiratoria  String?
-  temperatura             String?
-  saturacaoO2             String?
-  peso                    String?
-  altura                  String?
-  imc                     String?
-  
-  // Histórico
-  historicoMedico         String?
-  medicamentosEmUso       String?
-  alergias                String?
-  historicoFamiliar       String?
-  habitosVida             String?
-  examesAnteriores        String?
-  
-  // Exame Físico e Diagnóstico
-  revisaoSistemas         String?
-  examesFisicos           String?
-  hipoteseDiagnostica     String?
-  cid10                   String?
-  diagnosticosDiferenciais String?
-  condutaClinica          String?
 
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  patient   Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor    Doctor      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  // Queixa Principal e HDA
+  queixaPrincipal       String?
+  anamneseRetorno       String?
+  hdaInicio             String?
+  hdaDuracao            String?
+  hdaIntensidade        String?
+  hdaCaracteristica     String?
+  hdaLocalizacao        String?
+  hdaIrradiacao         String?
+  hdaFatoresMelhora     String?
+  hdaFatoresPiora       String?
+  hdaSintomasAssociados String?
+  hdaEvolucao           String?
+
+  // Sinais Vitais
+  pressaoArterial        String?
+  frequenciaCardiaca     String?
+  frequenciaRespiratoria String?
+  temperatura            String?
+  saturacaoO2            String?
+  peso                   String?
+  altura                 String?
+  imc                    String?
+
+  // Histórico
+  historicoMedico   String?
+  medicamentosEmUso String?
+  alergias          String?
+  historicoFamiliar String?
+  habitosVida       String?
+  examesAnteriores  String?
+
+  // Exame Físico e Diagnóstico
+  revisaoSistemas          String?
+  examesFisicos            String?
+  hipoteseDiagnostica      String?
+  cid10                    String?
+  diagnosticosDiferenciais String?
+  condutaClinica           String?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@index([patientId])
@@ -400,9 +436,9 @@ model AuditLog {
 }
 
 model PatientFile {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   patientId String
-  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   // Metadados
   fileName String
@@ -498,35 +534,35 @@ enum FileCategory {
 }
 
 model Signature {
-  id            String   @id @default(uuid())
-  certificateId String   @unique
-  
+  id            String @id @default(uuid())
+  certificateId String @unique
+
   // Documento
-  documentType  String   // "anamnese", "prescription", "exam", "report"
-  documentId    String   // ID da anamnese, prescrição, etc
-  documentHash  String   // Hash SHA-256 do conteúdo
-  
+  documentType String // "anamnese", "prescription", "exam", "report"
+  documentId   String // ID da anamnese, prescrição, etc
+  documentHash String // Hash SHA-256 do conteúdo
+
   // Assinante
-  signerId      String
-  signerName    String
-  signerCRM     String?
-  signerRole    String   // "doctor", "admin"
-  
+  signerId   String
+  signerName String
+  signerCRM  String?
+  signerRole String // "doctor", "admin"
+
   // Assinatura
-  signature     String   @db.Text
-  
+  signature String @db.Text
+
   // Metadados
-  ipAddress     String?
-  userAgent     String?
-  signedAt      DateTime
-  
+  ipAddress String?
+  userAgent String?
+  signedAt  DateTime
+
   // Verificação
-  verified      Boolean  @default(false)
-  verifiedAt    DateTime?
-  verifiedBy    String?
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  verified   Boolean   @default(false)
+  verifiedAt DateTime?
+  verifiedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([documentType, documentId])
   @@index([signerId])

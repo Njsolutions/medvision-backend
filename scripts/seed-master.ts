@@ -8,12 +8,17 @@ async function seedMaster() {
 	try {
 		console.log('Iniciando seed do master...')
 
-		const masterEmail = process.env.MASTER_EMAIL || 'natanaelsouza.dev@gmail.com'
-		const masterPassword = process.env.MASTER_PASSWORD || 'senha123'
+		const masterEmail = process.env.MASTER_EMAIL
+		const masterPassword = process.env.MASTER_PASSWORD
+		const masterCpf = process.env.MASTER_CPF
 		const masterName = process.env.MASTER_NAME || 'Master Amparo Online'
 
-		if (!masterEmail || !masterPassword) {
-			throw new Error('MASTER_EMAIL e MASTER_PASSWORD devem estar configurados no ambiente')
+		if (!masterEmail || !masterPassword || !masterCpf) {
+			throw new Error('MASTER_EMAIL, MASTER_PASSWORD e MASTER_CPF devem estar configurados no ambiente')
+		}
+
+		if (masterPassword.length < 12) {
+			throw new Error('MASTER_PASSWORD deve ter pelo menos 12 caracteres')
 		}
 
 		const existingUser = await prisma.user.findUnique({
@@ -30,7 +35,7 @@ async function seedMaster() {
 		const user = await prisma.user.create({
 			data: {
 				name: masterName,
-				cpf: process.env.MASTER_CPF || '00000000001',
+				cpf: masterCpf,
 				phone: '00000000000',
 				email: masterEmail,
 				password: hashedPassword,

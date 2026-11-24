@@ -3,7 +3,9 @@ import { patientFileRepository } from '@/modules/patientfile/patientfile.reposit
 import { storageService } from '@/services/storage.service'
 import { auditService } from '@/services/audit.service'
 import { realtimeService } from '@/services/realtime.service'
+import { doctorIdsForPatient } from '@/services/realtime-audience'
 import { canAccessPatient, isAdminLike, isDoctor } from '@/utils/security/access-control'
+import { logger } from '@/lib/logger'
 import {
 	UploadFileSchema,
 	GetFileUrlSchema,
@@ -23,42 +25,17 @@ export class PatientFileController {
 			// Validação de multipart
 			const data = await req.file()
 
-			console.log('📥 Upload request received')
-
 			if (!data) {
-				console.log('❌ No file provided in request')
 				return res.status(400).send({ error: 'No file provided' })
 			}
 
-			console.log('📄 File data:', {
-				filename: data.filename,
-				mimetype: data.mimetype,
-				encoding: data.encoding,
-			})
-
 			// Obter campos do formulário
 			const fields = data.fields as Record<string, { value: string }>
-			
-			// Log seguro dos campos (evitando referências circulares)
-			const fieldKeys = Object.keys(fields)
-			console.log('📋 Fields received:', fieldKeys)
-			const fieldValues: Record<string, any> = {}
-			for (const key of fieldKeys) {
-				fieldValues[key] = fields[key]?.value || fields[key]
-			}
-			console.log('📋 Field values:', fieldValues)
 
 			const patientId = fields.patientId?.value || (fields.patientId as any)
 			const fileType = fields.fileType?.value || (fields.fileType as any)
 
-			console.log('🔍 Extracted values:', { patientId, fileType })
-
 			if (!patientId || !fileType) {
-				console.log('❌ Missing required fields:', {
-					patientId: patientId || 'MISSING',
-					fileType: fileType || 'MISSING',
-					allFields: Object.keys(fields),
-				})
 				return res.status(400).send({
 					error: 'Missing required fields: patientId and fileType',
 				})
@@ -74,15 +51,8 @@ export class PatientFileController {
 			const mimeType = data.mimetype
 			const fileSize = buffer.length
 
-			console.log('📦 File details:', {
-				fileName,
-				mimeType,
-				fileSize: `${(fileSize / 1024 / 1024).toFixed(2)} MB`,
-			})
-
 			// Validar tamanho do arquivo
 			if (!storageService.validateFileSize(fileSize)) {
-				console.log('❌ File size exceeds limit:', fileSize)
 				return res.status(400).send({
 					error: 'File size exceeds maximum limit of 50MB',
 				})
@@ -90,7 +60,6 @@ export class PatientFileController {
 
 			// Validar tipo MIME
 			if (!storageService.validateMimeType(mimeType)) {
-				console.log('❌ Invalid MIME type:', mimeType)
 				return res.status(400).send({
 					error: 'Invalid file type. Only images, PDFs, and documents are allowed',
 				})
@@ -98,15 +67,11 @@ export class PatientFileController {
 
 			// Gerar chave de armazenamento
 			const storageKey = storageService.generateStorageKey(patientId, fileName)
-			console.log('🔑 Generated storage key:', storageKey)
 
 			// Upload para R2
-			console.log('☁️ Uploading to R2...')
 			await storageService.uploadFile(buffer, storageKey, mimeType)
-			console.log('✅ Upload to R2 successful')
 
 			// Salvar metadados no banco
-			console.log('💾 Saving metadata to database...')
 			const file = await patientFileRepository.create({
 				patientId,
 				fileName,
@@ -116,10 +81,8 @@ export class PatientFileController {
 				storageKey,
 				uploadedBy: req.user?.id || 'system',
 			})
-			console.log('✅ Metadata saved, file ID:', file.id)
 
 			// Audit log
-			console.log('📝 Creating audit log...')
 			await auditService.log({
 				userId: req.user?.id || 'system',
 				action: 'PATIENT_FILE_UPLOAD',
@@ -137,13 +100,12 @@ export class PatientFileController {
 
 			this.broadcastPatientFileEvent('patientFile.created', file)
 
-			console.log('🎉 Upload completed successfully!')
 			return res.status(201).send({
 				message: 'File uploaded successfully',
 				data: file,
 			})
 		} catch (error) {
-			console.error('❌ Error uploading file:', error)
+			req.log.error({ err: error }, '❌ Error uploading file')
 			return res.status(500).send({ error: 'Failed to upload file' })
 		}
 	}
@@ -206,7 +168,7 @@ export class PatientFileController {
 				},
 			})
 		} catch (error) {
-			console.error('Error generating file URL:', error)
+			req.log.error({ err: error }, 'Error generating file URL')
 			return res.status(500).send({ error: 'Failed to generate file URL' })
 		}
 	}
@@ -241,7 +203,7 @@ export class PatientFileController {
 				data: result,
 			})
 		} catch (error) {
-			console.error('Error listing files:', error)
+			req.log.error({ err: error }, 'Error listing files')
 			return res.status(500).send({ error: 'Failed to list files' })
 		}
 	}
@@ -297,7 +259,7 @@ export class PatientFileController {
 				message: 'File deleted successfully',
 			})
 		} catch (error) {
-			console.error('Error deleting file:', error)
+			req.log.error({ err: error }, 'Error deleting file')
 			return res.status(500).send({ error: 'Failed to delete file' })
 		}
 	}
@@ -337,7 +299,7 @@ export class PatientFileController {
 				},
 			})
 		} catch (error) {
-			console.error('Error getting file stats:', error)
+			req.log.error({ err: error }, 'Error getting file stats')
 			return res.status(500).send({ error: 'Failed to get file statistics' })
 		}
 	}
@@ -393,25 +355,23 @@ export class PatientFileController {
 			// Retornar o arquivo como stream
 			return res.send(fileData.body)
 		} catch (error) {
-			console.error('Error downloading file:', error)
+			req.log.error({ err: error }, 'Error downloading file')
 			return res.status(500).send({ error: 'Failed to download file' })
 		}
 	}
 
+	// Sem nome/tipo do arquivo no payload: o cliente refaz o GET autorizado se precisar.
 	private broadcastPatientFileEvent(type: 'patientFile.created' | 'patientFile.deleted', file: {
 		id: string
 		patientId: string
-		fileName: string
-		fileType: string
 	}) {
-		realtimeService.broadcast({
-			type,
-			data: {
-				fileId: file.id,
-				patientId: file.patientId,
-				fileName: file.fileName,
-				fileType: file.fileType,
-			},
-		})
+		void doctorIdsForPatient(file.patientId)
+			.then((doctorIds) => {
+				realtimeService.publish(
+					{ type, data: { fileId: file.id, patientId: file.patientId } },
+					{ patientId: file.patientId, doctorIds },
+				)
+			})
+			.catch((error) => logger.error({ err: error }, 'Error publishing patient file event'))
 	}
 }

@@ -5,6 +5,7 @@ import {
 	DeleteObjectCommand,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { logger } from '@/lib/logger'
 
 export class StorageService {
 	private s3Client: S3Client
@@ -65,7 +66,7 @@ export class StorageService {
 			await this.s3Client.send(command)
 			return key
 		} catch (error) {
-			console.error('Error uploading file to R2:', error)
+			logger.error({ err: error }, 'Error uploading file to R2')
 			throw new Error('Failed to upload file to storage')
 		}
 	}
@@ -85,7 +86,7 @@ export class StorageService {
 			const url = await getSignedUrl(this.s3Client, command, { expiresIn })
 			return url
 		} catch (error) {
-			console.error('Error generating signed URL:', error)
+			logger.error({ err: error }, 'Error generating signed URL')
 			throw new Error('Failed to generate download URL')
 		}
 	}
@@ -115,7 +116,7 @@ export class StorageService {
 				contentType: response.ContentType || 'application/octet-stream',
 			}
 		} catch (error) {
-			console.error('Error downloading file from R2:', error)
+			logger.error({ err: error }, 'Error downloading file from R2')
 			throw new Error('Failed to download file from storage')
 		}
 	}
@@ -132,7 +133,7 @@ export class StorageService {
 
 			await this.s3Client.send(command)
 		} catch (error) {
-			console.error('Error deleting file from R2:', error)
+			logger.error({ err: error }, 'Error deleting file from R2')
 			throw new Error('Failed to delete file from storage')
 		}
 	}

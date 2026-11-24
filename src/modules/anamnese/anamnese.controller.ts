@@ -130,7 +130,7 @@ export class AnamneseController {
 				},
 			});
 		} catch (error) {
-			console.error('Error creating anamnese:', error);
+			req.log.error({ err: error }, 'Error creating anamnese');
 			return res.status(500).send({ error: 'Erro interno do servidor' });
 		}
 	}
@@ -168,7 +168,7 @@ export class AnamneseController {
 				signatures, // Inclui assinaturas
 			});
 		} catch (error) {
-			console.error('Error getting anamnese:', error);
+			req.log.error({ err: error }, 'Error getting anamnese');
 			return res.status(500).send({ error: 'Erro interno do servidor' });
 		}
 	}
@@ -195,7 +195,7 @@ export class AnamneseController {
 				data: anamneses,
 			});
 		} catch (error) {
-			console.error('Error getting anamneses by patient:', error);
+			req.log.error({ err: error }, 'Error getting anamneses by patient');
 			return res.status(500).send({ error: 'Erro interno do servidor' });
 		}
 	}
@@ -222,7 +222,7 @@ export class AnamneseController {
 				data: anamneses,
 			});
 		} catch (error) {
-			console.error('Error getting anamneses by doctor:', error);
+			req.log.error({ err: error }, 'Error getting anamneses by doctor');
 			return res.status(500).send({ error: 'Erro interno do servidor' });
 		}
 	}
@@ -240,7 +240,7 @@ export class AnamneseController {
 				data: anamneses,
 			});
 		} catch (error) {
-			console.error('Error getting all anamneses:', error);
+			req.log.error({ err: error }, 'Error getting all anamneses');
 			return res.status(500).send({ error: 'Erro interno do servidor' });
 		}
 	}
@@ -299,7 +299,7 @@ export class AnamneseController {
 				data: anamnese,
 			});
 		} catch (error) {
-			console.error('Error updating anamnese:', error);
+			req.log.error({ err: error }, 'Error updating anamnese');
 			return res.status(500).send({ error: 'Erro interno do servidor' });
 		}
 	}
@@ -344,7 +344,7 @@ export class AnamneseController {
 				message: 'Anamnese deletada com sucesso',
 			});
 		} catch (error) {
-			console.error('Error deleting anamnese:', error);
+			req.log.error({ err: error }, 'Error deleting anamnese');
 			return res.status(500).send({ error: 'Erro interno do servidor' });
 		}
 	}
@@ -386,15 +386,8 @@ export class AnamneseController {
 			const signatures = await signatureRepository.findByDocument('anamnese', id);
 			const signature = signatures.length > 0 ? signatures[0] : undefined;
 
-			console.log('🔍 Assinaturas encontradas:', signatures.length);
 			if (signature) {
-				console.log('✅ Assinatura será incluída no PDF:', {
-					signedBy: signature.signerName,
-					crm: signature.signerCRM,
-					certificateId: signature.certificateId,
-				});
 			} else {
-				console.warn('⚠️ Nenhuma assinatura encontrada para esta anamnese - PDF será gerado sem assinatura');
 			}
 
 			// Gera PDF
@@ -421,7 +414,6 @@ export class AnamneseController {
 					userAgent: req.headers['user-agent'],
 				});
 			} catch (auditError) {
-				console.warn('⚠️ Erro ao registrar audit log:', auditError);
 			}
 
 			return res.status(200).send({
@@ -434,11 +426,7 @@ export class AnamneseController {
 				},
 			});
 		} catch (error) {
-			console.error('❌ Error generating PDF:', error);
-			if (error instanceof Error) {
-				console.error('Error message:', error.message);
-				console.error('Error stack:', error.stack);
-			}
+			req.log.error({ err: error }, '❌ Error generating PDF');
 			return res.status(500).send({ 
 				error: 'Erro ao gerar PDF',
 				details: error instanceof Error ? error.message : String(error)
@@ -520,7 +508,7 @@ export class AnamneseController {
 				},
 			});
 		} catch (error) {
-			console.error('Error signing anamnese:', error);
+			req.log.error({ err: error }, 'Error signing anamnese');
 			return res.status(500).send({ error: 'Erro interno do servidor' });
 		}
 	}
@@ -579,7 +567,7 @@ export class AnamneseController {
 				},
 			});
 		} catch (error) {
-			console.error('Error verifying integrity:', error);
+			req.log.error({ err: error }, 'Error verifying integrity');
 			return res.status(500).send({ error: 'Erro ao verificar integridade' });
 		}
 	}
@@ -590,14 +578,17 @@ export class AnamneseController {
 		doctorId: string;
 		appointmentId?: string | null;
 	}) {
-		realtimeService.broadcast({
-			type,
-			data: {
-				anamneseId: anamnese.id,
-				patientId: anamnese.patientId,
-				doctorId: anamnese.doctorId,
-				appointmentId: anamnese.appointmentId,
+		realtimeService.publish(
+			{
+				type,
+				data: {
+					anamneseId: anamnese.id,
+					patientId: anamnese.patientId,
+					doctorId: anamnese.doctorId,
+					appointmentId: anamnese.appointmentId,
+				},
 			},
-		});
+			{ patientId: anamnese.patientId, doctorIds: [anamnese.doctorId] },
+		);
 	}
 }

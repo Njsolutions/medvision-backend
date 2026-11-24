@@ -1,5 +1,40 @@
 import { db } from '@/lib/prisma'
-import type { AuditLogData } from '@/types/audit.types'
+import type { Prisma } from '@prisma/client'
+import type { AuditLogData, ImpactLevel } from '@/types/audit.types'
+
+const USER_SELECT = { id: true, name: true, email: true, role: true } as const
+
+export interface AuditLogFilters {
+  userId?: string
+  action?: string
+  impactLevel?: ImpactLevel
+  search?: string
+  startDate?: Date
+  endDate?: Date
+}
+
+function buildWhere(filters: AuditLogFilters): Prisma.AuditLogWhereInput {
+  const where: Prisma.AuditLogWhereInput = {}
+
+  if (filters.userId) where.userId = filters.userId
+  if (filters.action) where.action = filters.action
+  if (filters.impactLevel) where.impactLevel = filters.impactLevel
+  if (filters.startDate || filters.endDate) {
+    where.timestamp = {
+      ...(filters.startDate && { gte: filters.startDate }),
+      ...(filters.endDate && { lte: filters.endDate }),
+    }
+  }
+  if (filters.search) {
+    where.OR = [
+      { description: { contains: filters.search, mode: 'insensitive' } },
+      { user: { name: { contains: filters.search, mode: 'insensitive' } } },
+      { user: { email: { contains: filters.search, mode: 'insensitive' } } },
+    ]
+  }
+
+  return where
+}
 
 export class AuditLogRepository {
   async create(data: AuditLogData) {
@@ -13,159 +48,37 @@ export class AuditLogRepository {
         ipAddress: data.ipAddress,
         userAgent: data.userAgent,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
+      include: { user: { select: USER_SELECT } },
     })
   }
 
-  async findByUserId(
-    userId: string,
-    limit = 50,
-    offset = 0
-  ) {
+  async findMany(filters: AuditLogFilters, limit = 50, offset = 0) {
     return await db.auditLog.findMany({
-      where: { userId },
+      where: buildWhere(filters),
       orderBy: { timestamp: 'desc' },
       take: limit,
       skip: offset,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
+      include: { user: { select: USER_SELECT } },
     })
   }
 
-  async findByAction(
-    action: string,
-    limit = 50,
-    offset = 0
-  ) {
-    return await db.auditLog.findMany({
-      where: { action },
-      orderBy: { timestamp: 'desc' },
-      take: limit,
-      skip: offset,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
-    })
+  async count(filters: AuditLogFilters = {}): Promise<number> {
+    return await db.auditLog.count({ where: buildWhere(filters) })
   }
 
-  async findByImpactLevel(
-    impactLevel: string,
-    limit = 50,
-    offset = 0
-  ) {
-    return await db.auditLog.findMany({
-      where: { impactLevel: impactLevel as 'low' | 'medium' | 'high' | 'critical' },
-      orderBy: { timestamp: 'desc' },
-      take: limit,
-      skip: offset,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
+  async countByImpactLevel(): Promise<Record<ImpactLevel, number>> {
+    const groups = await db.auditLog.groupBy({
+      by: ['impactLevel'],
+      _count: { _all: true },
     })
+    const result: Record<ImpactLevel, number> = { low: 0, medium: 0, high: 0, critical: 0 }
+    for (const group of groups) result[group.impactLevel] = group._count._all
+    return result
   }
 
-  async findByDateRange(
-    startDate: Date,
-    endDate: Date,
-    limit = 50,
-    offset = 0
-  ) {
-    return await db.auditLog.findMany({
-      where: {
-        timestamp: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      orderBy: { timestamp: 'desc' },
-      take: limit,
-      skip: offset,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
-    })
-  }
-
-  async findAll(limit = 50, offset = 0) {
-    return await db.auditLog.findMany({
-      orderBy: { timestamp: 'desc' },
-      take: limit,
-      skip: offset,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
-    })
-  }
-
-  async count(filters?: {
-    userId?: string
-    action?: string
-    impactLevel?: string
-    startDate?: Date
-    endDate?: Date
-  }): Promise<number> {
-    const where: {
-      userId?: string
-      action?: string
-      impactLevel?: 'low' | 'medium' | 'high' | 'critical'
-      timestamp?: { gte?: Date; lte?: Date }
-    } = {}
-
-    if (filters?.userId) where.userId = filters.userId
-    if (filters?.action) where.action = filters.action
-    if (filters?.impactLevel) where.impactLevel = filters.impactLevel as 'low' | 'medium' | 'high' | 'critical'
-    if (filters?.startDate || filters?.endDate) {
-      where.timestamp = {}
-      if (filters.startDate) where.timestamp.gte = filters.startDate
-      if (filters.endDate) where.timestamp.lte = filters.endDate
-    }
-
-    return await db.auditLog.count({ where })
+  async listActions(): Promise<string[]> {
+    const groups = await db.auditLog.groupBy({ by: ['action'], orderBy: { action: 'asc' } })
+    return groups.map((group) => group.action)
   }
 }
 

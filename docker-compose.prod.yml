@@ -1,4 +1,17 @@
 services:
+  # Aplica as migrations e termina. A API só sobe depois que este serviço conclui com sucesso.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medvision-migrate
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    networks:
+      - web
+    restart: "no"
+
   app:
     build:
       context: .
@@ -8,14 +21,14 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       API_VERSION: ${API_VERSION:-1}
       PORT: ${PORT:-3333}
-      JWT_SECRET: ${JWT_SECRET}
       COOKIE_SECRET: ${COOKIE_SECRET}
+      ENABLE_DOCS: ${ENABLE_DOCS:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ORIGINS: ${CORS_ORIGINS}
       NODE_ENV: ${NODE_ENV:-production}
       DAILY_CO_API_KEY: ${DAILY_CO_API_KEY}
-      DAILY_DOMAIN: ${DAILY_DOMAIN}
       RESEND_API_KEY: ${RESEND_API_KEY}
-      EMAIL_FROM: ${EMAIL_FROM:-MedVision <noreply@medvision.com>}
+      EMAIL_FROM: ${EMAIL_FROM:?Defina EMAIL_FROM no .env}
       R2_ENDPOINT: ${R2_ENDPOINT}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
@@ -23,6 +36,11 @@ services:
       SIGNATURE_SECRET_KEY: ${SIGNATURE_SECRET_KEY}
       APP_URL: ${APP_URL}
       FRONTEND_URL: ${FRONTEND_URL}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      WHATSAPP_API_URL: ${WHATSAPP_API_URL:-}
+      WHATSAPP_API_TOKEN: ${WHATSAPP_API_TOKEN:-}
+      SMS_API_URL: ${SMS_API_URL:-}
+      SMS_API_TOKEN: ${SMS_API_TOKEN:-}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.medvision-api.rule=Host(`${API_DOMAIN}`)"
@@ -30,6 +48,9 @@ services:
       - "traefik.http.routers.medvision-api.tls.certresolver=mytlschallenge"
       - "traefik.http.services.medvision-api.loadbalancer.server.port=3333"
       - "traefik.docker.network=web"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     networks:
       - web
     restart: unless-stopped

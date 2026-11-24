@@ -1,6 +1,7 @@
 import { AdminRepository } from '@/modules/admin/admin.repository'
 import { CreateAdminSchema, UpdateAdminSchema, AdminIdSchema } from '@/modules/admin/admin.schema'
 import { CryptoService } from '@/services/crypto.service'
+import { sendFirstAccess } from '@/services/first-access.service'
 import { auditService } from '@/services/audit.service'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
@@ -37,8 +38,8 @@ export class AdminController {
 				return res.status(409).send({ error: 'Email already registered' })
 			}
 
-			const generatedPassword = this.cryptoService.generateRandomCode(8)
-			const hashedPassword = await this.cryptoService.hashPassword(generatedPassword)
+			// Ninguém conhece esta senha: o admin define a própria pelo link enviado por e-mail.
+			const hashedPassword = await this.cryptoService.hashUnusablePassword()
 
 			const admin = await this.adminRepository.create({
 				...data.data,
@@ -55,15 +56,17 @@ export class AdminController {
 				)
 			}
 
+			const firstAccessEmailSent = await sendFirstAccess(admin.user, 'admin')
+
 			return res.status(201).send({
 				message: 'Admin created successfully',
 				data: {
 					admin,
-					temporaryPassword: generatedPassword,
+					firstAccessEmailSent,
 				}
 			})
 		} catch (error) {
-			console.error('Error creating admin:', error)
+			req.log.error({ err: error }, 'Error creating admin')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -101,7 +104,7 @@ export class AdminController {
 				message: 'Admin deleted successfully',
 			})
 		} catch (error) {
-			console.error('Error deleting admin:', error)
+			req.log.error({ err: error }, 'Error deleting admin')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -124,7 +127,7 @@ export class AdminController {
 				pagination: result.pagination,
 			})
 		} catch (error) {
-			console.error('Error listing admins:', error)
+			req.log.error({ err: error }, 'Error listing admins')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}
@@ -178,7 +181,7 @@ export class AdminController {
 				data: updatedAdmin,
 			})
 		} catch (error) {
-			console.error('Error updating admin:', error)
+			req.log.error({ err: error }, 'Error updating admin')
 			return res.status(500).send({ error: 'Internal server error' })
 		}
 	}

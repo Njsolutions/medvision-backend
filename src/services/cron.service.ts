@@ -1,6 +1,8 @@
 import cron from 'node-cron'
 import { db } from '@/lib/prisma'
 import { createDailyService } from './daily.service'
+import { sessionService } from './session.service'
+import { logger } from '@/lib/logger'
 
 export class CronService {
 	private dailyService = createDailyService()
@@ -11,7 +13,7 @@ export class CronService {
 	 */
 	startExpiredAppointmentsCheck() {
 		// Executa imediatamente ao iniciar para processar consultas já expiradas
-		console.log('🚀 Executando verificação inicial de consultas expiradas...')
+		logger.info('Executando verificação inicial de consultas expiradas')
 		this.cancelExpiredAppointments()
 
 		// Executa a cada 1 hora (minuto 0 de cada hora)
@@ -19,7 +21,7 @@ export class CronService {
 			await this.cancelExpiredAppointments()
 		})
 
-		console.log('✅ Cron job de cancelamento de consultas expiradas iniciado (executa a cada 1 hora)')
+		logger.info('Cron job de cancelamento de consultas expiradas iniciado (a cada 1 hora)')
 	}
 
 	/**
@@ -31,94 +33,41 @@ export class CronService {
 			const now = new Date()
 			// Considera expiradas apenas consultas com mais de 1 hora de atraso
 			const cutoffTime = new Date(now.getTime() - 60 * 60 * 1000) // 1 hora atrás
-			
-			console.log(`🔍 [${now.toISOString()}] Verificando consultas expiradas...`)
-			console.log(`📅 Data/hora atual: ${now.toISOString()} (Local: ${now.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })})`)
-			console.log(`⏰ Tempo de corte (1 hora atrás): ${cutoffTime.toISOString()} (Local: ${cutoffTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })})`)
-			console.log(`📌 Regra: Apenas consultas com status 'scheduled' agendadas antes de ${cutoffTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} serão canceladas`)
-			console.log(`⚠️  Consultas com outros status (inProgress, completed, cancelled, noShow) serão IGNORADAS`)
 
-			// Buscar todas as consultas agendadas primeiro para debug
-			const allScheduled = await db.appointment.findMany({
-				where: {
-					status: 'scheduled',
-				},
-				select: {
-					id: true,
-					appointmentDate: true,
-					status: true,
-				},
-			})
-
-			console.log(`\n📊 Total de consultas agendadas no sistema: ${allScheduled.length}`)
-			if (allScheduled.length > 0) {
-				console.log('📋 Consultas agendadas encontradas:')
-				for (const apt of allScheduled) {
-					const aptDate = new Date(apt.appointmentDate)
-					const isExpired = aptDate < cutoffTime
-					const hoursDiff = (now.getTime() - aptDate.getTime()) / (1000 * 60 * 60)
-					console.log(`   - ID: ${apt.id.substring(0, 8)}... | Data: ${aptDate.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} | Atraso: ${hoursDiff.toFixed(2)}h | Cancelar: ${isExpired ? '✅ SIM' : '❌ NÃO'}`)
-				}
-			}
-
-			// Buscar consultas agendadas há mais de 1 hora (expiradas)
+			// Só consultas 'scheduled' agendadas antes do corte. Outros status são ignorados.
 			const expiredAppointments = await db.appointment.findMany({
 				where: {
 					status: 'scheduled',
 					appointmentDate: {
-						lt: cutoffTime, // Consultas agendadas há mais de 1 hora
+						lt: cutoffTime,
 					},
 				},
-				include: {
-					patient: {
-						include: {
-							user: {
-								select: {
-									name: true,
-									email: true,
-								},
-							},
-						},
-					},
-					doctor: {
-						include: {
-							user: {
-								select: {
-									name: true,
-									email: true,
-								},
-							},
-						},
-					},
+				select: {
+					id: true,
+					status: true,
+					notes: true,
+					roomName: true,
+					appointmentDate: true,
 				},
 			})
 
 			if (expiredAppointments.length === 0) {
-				console.log('✅ Nenhuma consulta expirada encontrada para cancelar.')
+				logger.debug('Nenhuma consulta expirada para cancelar')
 				return
 			}
 
-			console.log(`📋 Encontradas ${expiredAppointments.length} consultas expiradas para cancelar.`)
-			console.log('🔄 Iniciando cancelamento...')
+			let cancelled = 0
 
-			// Processar cada consulta expirada
 			for (const appointment of expiredAppointments) {
 				try {
 					// Verificação adicional de segurança: ignorar se não for 'scheduled'
 					if (appointment.status !== 'scheduled') {
-						console.log(`\n⚠️  Consulta ${appointment.id} IGNORADA - Status atual: '${appointment.status}' (não é 'scheduled')`)
 						continue
 					}
 
-					console.log(`\n🔄 Processando consulta: ${appointment.id}`)
-					console.log(`   Status atual: ${appointment.status}`)
-					console.log(`   Paciente: ${appointment.patient.user.name}`)
-					console.log(`   Médico: ${appointment.doctor.user.name}`)
-					console.log(`   Data agendada: ${new Date(appointment.appointmentDate).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`)
-					
 					// 1. Atualizar status da consulta para 'cancelled'
 					const cancelNote = `[Sistema] Consulta cancelada automaticamente por mais de 1 hora de atraso. Horário agendado: ${new Date(appointment.appointmentDate).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}. Cancelada em: ${now.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
-					
+
 					await db.appointment.update({
 						where: { id: appointment.id },
 						data: {
@@ -129,36 +78,42 @@ export class CronService {
 						},
 					})
 
-					console.log(`   ✅ Status atualizado para 'cancelled'`)
+					cancelled++
 
 					// 2. Deletar sala do Daily.co se existir
 					if (appointment.roomName) {
 						try {
-							console.log(`   🗑️  Deletando sala: ${appointment.roomName}`)
 							await this.dailyService.deleteRoom(appointment.roomName)
-							console.log(`   ✅ Sala deletada com sucesso`)
 						} catch (error) {
-							console.error(`   ❌ Erro ao deletar sala ${appointment.roomName}:`, error)
+							logger.error({ err: error, appointmentId: appointment.id }, 'Erro ao deletar sala Daily da consulta expirada')
 							// Continua mesmo se houver erro ao deletar a sala
 						}
-					} else {
-						console.log(`   ℹ️  Nenhuma sala Daily.co associada`)
 					}
-					
-					console.log(`✅ Consulta ${appointment.id.substring(0, 8)}... processada com sucesso\n`)
 				} catch (error) {
-					console.error(`❌ Erro ao processar consulta ${appointment.id}:`, error)
+					logger.error({ err: error, appointmentId: appointment.id }, 'Erro ao processar consulta expirada')
 					// Continua para processar as próximas consultas
 				}
 			}
 
-			console.log(`\n✅ ========================================`)
-			console.log(`✅ Processamento concluído!`)
-			console.log(`✅ Total de consultas canceladas: ${expiredAppointments.length}`)
-			console.log(`✅ ========================================\n`)
+			logger.info({ found: expiredAppointments.length, cancelled }, 'Consultas expiradas processadas')
 		} catch (error) {
-			console.error('❌ Erro no cron job de cancelamento de consultas expiradas:', error)
+			logger.error({ err: error }, 'Erro no cron job de cancelamento de consultas expiradas')
 		}
+	}
+
+	/** Remove sessões expiradas ou revogadas há mais de 7 dias. Executa diariamente às 03:30. */
+	startSessionCleanup() {
+		const run = async () => {
+			try {
+				const removed = await sessionService.deleteExpired()
+				if (removed > 0) logger.info({ removed }, 'Sessões antigas removidas')
+			} catch (error) {
+				logger.error({ err: error }, 'Erro ao limpar sessões antigas')
+			}
+		}
+
+		void run()
+		cron.schedule('30 3 * * *', run)
 	}
 
 	/**
@@ -166,7 +121,7 @@ export class CronService {
 	 * Útil para testes ou execução manual
 	 */
 	async runManually() {
-		console.log('🔄 Executando cancelamento de consultas expiradas manualmente...')
+		logger.info('Executando cancelamento de consultas expiradas manualmente')
 		await this.cancelExpiredAppointments()
 	}
 }
