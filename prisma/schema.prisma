@@ -28,6 +28,7 @@ model User {
   auditLogs    AuditLog[]
   triagens     Triagem[]
   patientFiles PatientFile[]
+  utiNotes     UtiNote[]
 
   @@map("users")
 }
@@ -101,6 +102,7 @@ model Patient {
   uti           Uti?
   triagens      Triagem[]
   files         PatientFile[]
+  utiNotes      UtiNote[]
 
   @@map("patients")
 }
@@ -118,7 +120,37 @@ model Uti {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  notes UtiNote[]
+
   @@map("utis")
+}
+
+// Histórico de anotações/chat clínico do leito. Append-only: nunca é editado nem apagado.
+// As FKs usam SetNull e os campos *Name/bedNumber são snapshots, então o registro
+// sobrevive a alta, troca de leito e remoção de paciente/usuário.
+model UtiNote {
+  id String @id @default(uuid())
+
+  utiId String?
+  uti   Uti?    @relation(fields: [utiId], references: [id], onDelete: SetNull)
+
+  patientId String?
+  patient   Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  bedNumber   String
+  patientName String
+  authorName  String
+  authorRole  Roles
+  content     String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([patientId, createdAt])
+  @@index([utiId, createdAt])
+  @@map("uti_notes")
 }
 
 model Triagem {

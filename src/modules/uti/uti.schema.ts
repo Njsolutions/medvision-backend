@@ -24,6 +24,14 @@ export const UtiVisitorInviteSchema = z.object({
 		.refine((value) => value.length >= 10 && value.length <= 15, 'Telefone invÃ¡lido'),
 }).partial()
 
+export const CreateUtiNoteSchema = z.object({
+	content: z
+		.string()
+		.transform((value) => value.trim())
+		.pipe(z.string().min(1, 'A anotação não pode ser vazia').max(5000, 'A anotação excede 5000 caracteres')),
+})
+
+export type CreateUtiNoteInput = z.infer<typeof CreateUtiNoteSchema>
 export type CreateUtiInput = z.infer<typeof CreateUtiSchema>
 export type UpdateUtiInput = z.infer<typeof UpdateUtiSchema>
 export type UtiIdInput = z.infer<typeof UtiIdSchema>

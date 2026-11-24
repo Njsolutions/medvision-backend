@@ -127,7 +127,9 @@ export class UtiRepository {
 				},
 			},
 		})
-	}	async checkPatientExists(patientId: string) {
+	}
+
+	async checkPatientExists(patientId: string) {
 		return db.patient.findUnique({
 			where: { id: patientId },
 		})
@@ -136,6 +138,49 @@ export class UtiRepository {
 	async checkPatientHasUti(patientId: string) {
 		return db.uti.findUnique({
 			where: { patientId },
+		})
+	}
+
+	// Histórico por paciente (não por leito): sobrevive à alta e é retomado em nova internação.
+	async findNotesByPatient(patientId: string) {
+		return db.utiNote.findMany({
+			where: { patientId },
+			orderBy: { createdAt: 'asc' },
+			select: {
+				id: true,
+				utiId: true,
+				bedNumber: true,
+				authorId: true,
+				authorName: true,
+				authorRole: true,
+				content: true,
+				createdAt: true,
+			},
+		})
+	}
+
+	async createNote(data: {
+		utiId: string
+		patientId: string
+		bedNumber: string
+		patientName: string
+		authorId: string
+		authorName: string
+		authorRole: 'master' | 'admin' | 'doctor' | 'patient'
+		content: string
+	}) {
+		return db.utiNote.create({
+			data,
+			select: {
+				id: true,
+				utiId: true,
+				bedNumber: true,
+				authorId: true,
+				authorName: true,
+				authorRole: true,
+				content: true,
+				createdAt: true,
+			},
 		})
 	}
 }

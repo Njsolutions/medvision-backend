@@ -580,7 +580,7 @@ export class RequestController {
 				message: 'PDF gerado com sucesso',
 				data: {
 					pdf: base64PDF,
-					filename: `medvision-solicitacao-${request.patient?.user.name.replace(/\s+/g, '_') ?? request.id}-${new Date().toISOString().split('T')[0]}.pdf`,
+					filename: `amparo-online-solicitacao-${request.patient?.user.name.replace(/\s+/g, '_') ?? request.id}-${new Date().toISOString().split('T')[0]}.pdf`,
 					mimeType: 'application/pdf',
 					size: Buffer.from(base64PDF, 'base64').length,
 				},

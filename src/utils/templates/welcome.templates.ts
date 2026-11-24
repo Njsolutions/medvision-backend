@@ -5,7 +5,7 @@ export const welcomePatientTemplate = (
 	data: WelcomeEmailData,
 ): EmailTemplate => {
 	const content = `
-        <h2>Bem-vindo ao MedVision!</h2>
+        <h2>Bem-vindo ao Amparo Online!</h2>
         <p>Olá ${data.name},</p>
         <p>É um prazer tê-lo(a) conosco! Sua conta foi criada com sucesso.</p>
         
@@ -38,14 +38,14 @@ export const welcomePatientTemplate = (
     `
 
 	return {
-		subject: 'Bem-vindo ao MedVision!',
+		subject: 'Bem-vindo ao Amparo Online!',
 		html: baseTemplate(content, 'Bem-vindo'),
 	}
 }
 
 export const welcomeDoctorTemplate = (data: WelcomeEmailData): EmailTemplate => {
 	const content = `
-        <h2>Bem-vindo à Equipe MedVision!</h2>
+        <h2>Bem-vindo à Equipe Amparo Online!</h2>
         <p>Olá Dr(a). ${data.name},</p>
         <p>É uma honra tê-lo(a) em nossa equipe! Sua conta médica foi criada com sucesso.</p>
         
@@ -89,7 +89,7 @@ export const welcomeDoctorTemplate = (data: WelcomeEmailData): EmailTemplate => 
     `
 
 	return {
-		subject: 'Bem-vindo à Equipe MedVision!',
+		subject: 'Bem-vindo à Equipe Amparo Online!',
 		html: baseTemplate(content, 'Bem-vindo à Equipe'),
 	}
 }

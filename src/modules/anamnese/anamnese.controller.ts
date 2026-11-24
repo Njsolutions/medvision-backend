@@ -428,7 +428,7 @@ export class AnamneseController {
 				message: 'PDF gerado com sucesso',
 				data: {
 					pdf: base64PDF,
-					filename: `medvision-anamnese-${anamnese.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
+					filename: `amparo-online-anamnese-${anamnese.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
 					mimeType: 'application/pdf',
 					size: Buffer.from(base64PDF, 'base64').length,
 				},

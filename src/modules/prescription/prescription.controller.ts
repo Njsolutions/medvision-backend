@@ -15,6 +15,7 @@ import { signatureRepository } from '@/repositories/signature.repository'
 import { pdfGeneratorService } from '@/services/pdf-generator.service'
 import { realtimeService } from '@/services/realtime.service'
 import { signatureService } from '@/services/signature.service'
+import { canAccessPatient, isPatient } from '@/utils/security/access-control'
 
 export class PrescriptionController {
 	/**
@@ -184,12 +185,38 @@ export class PrescriptionController {
 	) {
 		try {
 			const query = listPrescriptionQuerySchema.parse(request.query)
+			const user = request.user
+
+			// Paciente só enxerga as próprias prescrições
+			if (isPatient(user)) {
+				if (!user.patientId) {
+					return reply.status(403).send({
+						statusCode: 403,
+						error: 'Forbidden',
+						message: 'Paciente não vinculado ao usuário',
+					})
+				}
+				query.patientId = user.patientId
+			}
+
 			const result = await prescriptionRepository.list(query)
+
+			// Não expõe CPF/e-mail do médico ao paciente
+			const data = isPatient(user)
+				? result.data.map((prescription) => ({
+						...prescription,
+						doctor: {
+							...prescription.doctor,
+							user: { id: prescription.doctor.user.id, name: prescription.doctor.user.name },
+						},
+					}))
+				: result.data
 
 			return reply.status(200).send({
 				statusCode: 200,
 				message: 'Prescrições listadas com sucesso',
 				...result,
+				data,
 			})
 		} catch (error) {
 			if (error instanceof Error && error.name === 'ZodError') {
@@ -228,6 +255,14 @@ export class PrescriptionController {
 					statusCode: 404,
 					error: 'Not Found',
 					message: 'Prescrição não encontrada',
+				})
+			}
+
+			if (!(await canAccessPatient(request.user, prescription.patientId))) {
+				return reply.status(403).send({
+					statusCode: 403,
+					error: 'Forbidden',
+					message: 'Você não tem permissão para acessar esta prescrição',
 				})
 			}
 
@@ -453,7 +488,7 @@ export class PrescriptionController {
 				message: 'PDF gerado com sucesso',
 				data: {
 					pdf: base64PDF,
-					filename: `medvision-prescricao-${prescription.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
+					filename: `amparo-online-prescricao-${prescription.patient.user.name.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`,
 					mimeType: 'application/pdf',
 					size: Buffer.from(base64PDF, 'base64').length,
 				},

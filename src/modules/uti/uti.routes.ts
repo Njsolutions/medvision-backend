@@ -10,5 +10,7 @@ export function utiRoutes(app: FastifyInstance) {
 	app.get('/:id', { preHandler: [app.authenticate] }, async (req, res) => controller.getById(req, res))
 	app.get('/:id/room-token', { preHandler: [app.authenticate] }, async (req, res) => controller.getRoomToken(req, res))
 	app.post('/:id/visitor-invite', { preHandler: [app.authenticate] }, async (req, res) => controller.inviteVisitor(req, res))
+	app.get('/:id/notes', { preHandler: [app.authenticate] }, async (req, res) => controller.listNotes(req, res))
+	app.post('/:id/notes', { preHandler: [app.authenticate] }, async (req, res) => controller.createNote(req, res))
 	app.put('/:id', { preHandler: [app.authenticate] }, async (req, res) => controller.update(req, res))
 }

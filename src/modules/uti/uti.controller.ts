@@ -1,5 +1,5 @@
 import { UtiRepository } from '@/modules/uti/uti.repository'
-import { CreateUtiSchema, UpdateUtiSchema, UtiIdSchema, UtiVisitorInviteSchema } from '@/modules/uti/uti.schema'
+import { CreateUtiNoteSchema, CreateUtiSchema, UpdateUtiSchema, UtiIdSchema, UtiVisitorInviteSchema } from '@/modules/uti/uti.schema'
 import { auditService } from '@/services/audit.service'
 import { createDailyService } from '@/services/daily.service'
 import { realtimeService } from '@/services/realtime.service'
@@ -477,6 +477,92 @@ export class UtiController {
 			})
 		} catch (error) {
 			console.error('Error inviting UTI visitor:', error)
+			return res.status(500).send({ error: 'Erro interno do servidor' })
+		}
+	}
+
+	async listNotes(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (!(await canAccessUti(req.user))) {
+				return res.status(403).send({ error: 'Permissão insuficiente para visualizar anotações da UTI' })
+			}
+
+			const params = UtiIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'ID do leito de UTI inválido', details: params.error })
+			}
+
+			const uti = await this.utiRepository.findById(params.data.id)
+
+			if (!uti) {
+				return res.status(404).send({ error: 'Leito de UTI não encontrado' })
+			}
+
+			const notes = uti.patientId ? await this.utiRepository.findNotesByPatient(uti.patientId) : []
+
+			return res.status(200).send({
+				message: 'UTI notes retrieved successfully',
+				data: notes,
+			})
+		} catch (error) {
+			console.error('Error fetching UTI notes:', error)
+			return res.status(500).send({ error: 'Erro interno do servidor' })
+		}
+	}
+
+	async createNote(req: FastifyRequest, res: FastifyReply) {
+		try {
+			if (!req.user) {
+				return res.status(401).send({ error: 'Não autorizado' })
+			}
+
+			if (!(await canAccessUti(req.user))) {
+				return res.status(403).send({ error: 'Permissão insuficiente para registrar anotações da UTI' })
+			}
+
+			const params = UtiIdSchema.safeParse(req.params)
+
+			if (!params.success) {
+				return res.status(400).send({ error: 'ID do leito de UTI inválido', details: params.error })
+			}
+
+			const data = CreateUtiNoteSchema.safeParse(req.body)
+
+			if (!data.success) {
+				return res.status(400).send({ error: 'Dados da requisição inválidos', details: data.error })
+			}
+
+			const uti = await this.utiRepository.findById(params.data.id)
+
+			if (!uti) {
+				return res.status(404).send({ error: 'Leito de UTI não encontrado' })
+			}
+
+			if (!uti.patientId || !uti.patient) {
+				return res.status(409).send({ error: 'Leito sem paciente internado' })
+			}
+
+			const note = await this.utiRepository.createNote({
+				utiId: uti.id,
+				patientId: uti.patientId,
+				bedNumber: uti.bedNumber,
+				patientName: uti.patient.user.name,
+				authorId: req.user.id,
+				authorName: req.user.name,
+				authorRole: req.user.role,
+				content: data.data.content,
+			})
+
+			// Payload sem conteúdo clínico: clientes refazem o GET autorizado.
+			realtimeService.broadcast({ type: 'uti.note.created', data: { utiId: uti.id } })
+
+			return res.status(201).send({
+				message: 'UTI note created successfully',
+				data: note,
+			})
+		} catch (error) {
+			console.error('Error creating UTI note:', error)
 			return res.status(500).send({ error: 'Erro interno do servidor' })
 		}
 	}

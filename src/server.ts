@@ -63,7 +63,7 @@ server.register(authPlugin)
 server.register(fastifySwagger, {
 	openapi: {
 		info: {
-			title: `MedVision API v${version}`,
+			title: `Amparo Online API v${version}`,
 			version: version,
 			description: 'API documentation',
 		},

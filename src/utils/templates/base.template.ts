@@ -133,13 +133,13 @@ export const baseTemplate = (content: string, title: string): string => {
 <body>
     <div class="email-container">
         <div class="header">
-            <h1>MedVision</h1>
+            <h1>Amparo Online</h1>
         </div>
         <div class="content">
             ${content}
         </div>
         <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} MedVision. Todos os direitos reservados.</p>
+            <p>&copy; ${new Date().getFullYear()} Amparo Online. Todos os direitos reservados.</p>
             <p>Este é um email automático, por favor não responda.</p>
         </div>
     </div>

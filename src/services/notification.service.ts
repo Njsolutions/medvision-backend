@@ -36,7 +36,7 @@ class NotificationService {
 		try {
 			const response = await emailService.sendEmail({
 				to: data.to.email,
-				subject: data.subject || 'Notificação MedVision',
+				subject: data.subject || 'Notificação Amparo Online',
 				html: `<p>${data.message.replace(/\n/g, '<br>')}</p>`,
 			})
 

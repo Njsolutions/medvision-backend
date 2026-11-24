@@ -10,7 +10,7 @@ async function seedAdmin() {
 
 		const adminEmail = process.env.ADMIN_EMAIL
 		const adminPassword = process.env.ADMIN_PASSWORD
-		const adminName = process.env.ADMIN_NAME || 'Administrador MedVision'
+		const adminName = process.env.ADMIN_NAME || 'Administrador Amparo Online'
 
 		if (!adminEmail || !adminPassword) {
 			throw new Error('ADMIN_EMAIL e ADMIN_PASSWORD devem estar configurados no ambiente')

@@ -35,7 +35,7 @@ export const passwordResetTemplate = (
     `
 
 	return {
-		subject: 'Redefinição de Senha - MedVision',
+		subject: 'Redefinição de Senha - Amparo Online',
 		html: baseTemplate(content, 'Redefinição de Senha'),
 	}
 }
@@ -46,7 +46,7 @@ export const accountVerificationTemplate = (
 	const content = `
         <h2>Verificação de Conta</h2>
         <p>Olá ${data.name},</p>
-        <p>Obrigado por se cadastrar no MedVision! Para ativar sua conta, clique no botão abaixo:</p>
+        <p>Obrigado por se cadastrar no Amparo Online! Para ativar sua conta, clique no botão abaixo:</p>
         
         <div style="text-align: center;">
             <a href="${data.verificationUrl}" class="button">Verificar Conta</a>
@@ -61,11 +61,11 @@ export const accountVerificationTemplate = (
         <p>Se o botão não funcionar, copie e cole este link no navegador:</p>
         <p style="word-break: break-all; color: #667eea;">${data.verificationUrl}</p>
         
-        <p>Se você não criou uma conta no MedVision, ignore este email.</p>
+        <p>Se você não criou uma conta no Amparo Online, ignore este email.</p>
     `
 
 	return {
-		subject: 'Verifique sua Conta - MedVision',
+		subject: 'Verifique sua Conta - Amparo Online',
 		html: baseTemplate(content, 'Verificação de Conta'),
 	}
 }
@@ -102,7 +102,7 @@ export const securityCodeTemplate = (
     `
 
 	return {
-		subject: 'Seu Código de Segurança - MedVision',
+		subject: 'Seu Código de Segurança - Amparo Online',
 		html: baseTemplate(content, 'Código de Segurança'),
 	}
 }
@@ -140,7 +140,7 @@ export const passwordRecoveryCodeTemplate = (
     `
 
 	return {
-		subject: 'Código de Recuperação de Senha - MedVision',
+		subject: 'Código de Recuperação de Senha - Amparo Online',
 		html: baseTemplate(content, 'Recuperação de Senha'),
 	}
 }

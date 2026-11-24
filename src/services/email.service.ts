@@ -35,7 +35,7 @@ class EmailService {
 		}
 
 		this.resend = new Resend(apiKey)
-		this.defaultFrom = process.env.EMAIL_FROM || 'MedVision <noreply@medvision.com>'
+		this.defaultFrom = process.env.EMAIL_FROM || 'Amparo Online <noreply@medvision.com>'
 	}
 
 	async sendEmail(options: EmailOptions): Promise<SendEmailResponse> {

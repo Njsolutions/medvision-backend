@@ -4,6 +4,7 @@ import { anamneseRoutes } from './anamnese/anamnese.routes'
 import { appointmentRoutes } from './appointment/appointment.routes'
 import { auditLogRoutes } from './auditlog/auditlog.routes'
 import { authRoutes } from './auth/auth.routes'
+import { dashboardRoutes } from './dashboard/dashboard.routes'
 import { doctorRoutes } from './doctor/doctor.routes'
 import { notificationRoutes } from './notification/notification.routes'
 import { patientRoutes } from './patient/patient.routes'
@@ -17,6 +18,7 @@ import { utiRoutes } from './uti/uti.routes'
 export function registerModules(app: FastifyInstance, version: string) {
 	app.register(authRoutes, { prefix: `/v${version}/auth` })
 	app.register(adminRoutes, { prefix: `/v${version}/admins` })
+	app.register(dashboardRoutes, { prefix: `/v${version}/dashboard` })
 	app.register(doctorRoutes, { prefix: `/v${version}/doctors` })
 	app.register(patientRoutes, { prefix: `/v${version}/patients` })
 	app.register(utiRoutes, { prefix: `/v${version}/utis` })
